@@ -1,116 +1,187 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type {
+  CSSProperties,
+  HTMLAttributes,
+  TdHTMLAttributes,
+} from "react";
 import {
   Button,
   Card,
   Divider,
   message,
+  Select,
   Space,
   Table,
   Tabs,
   Typography,
 } from "antd";
-import type { ColumnType, ColumnsType } from "antd/es/table";
+import type { ColumnType } from "antd/es/table";
 import { CaretUpOutlined, CaretDownOutlined } from "@ant-design/icons";
-
-type CapitalFlowEntry = {
-  statistic_date: string;
-  week_purchase_redeem: number;
-};
+import type { CapitalFlowEntry } from "@/lib/types/capitalFlow";
 
 type IndexRecord = {
   id: number;
   index_code: string;
   index_name: string;
-  price_change_rate: number;
-  etf_latest_scales: number;
-  turnover: number;
-  etf_net_pur_redeem: number;
-  etf_net_pur_redeem1w: number;
-  etf_net_pur_redeem1m: number;
-  chg_rate_d5: number;
-  chg_rate_m1: number;
-  chg_rate_year: number;
-  pe_ttm: number;
-  pe_ttm_percent_y3: number;
-  pb: number;
-  pb_percent_y3: number;
-  dividend_yield_ratio: number;
-  capital_flow_w8: CapitalFlowEntry[];
+  price_change_rate?: number | null;
+  etf_latest_scales?: number | null;
+  turnover?: number | null;
+  etf_net_pur_redeem?: number | null;
+  etf_net_pur_redeem1m?: number | null;
+  chg_rate_d5?: number | null;
+  chg_rate_m1?: number | null;
+  chg_rate_year?: number | null;
+  pe_ttm?: number | null;
+  pe_ttm_percent_y3?: number | null;
+  pb?: number | null;
+  pb_percent_y3?: number | null;
+  dividend_yield_ratio?: number | null;
+  capital_flow_w8?: CapitalFlowEntry[];
   trade_date: string;
-  source: string;
-  index_type: string;
+  source?: string | null;
 };
 
-const MOCK_RECORDS: IndexRecord[] = [
+type ColumnRecord = {
+  id: number;
+  key: string;
+  displayName: string;
+  description?: string | null;
+  displayOrder: number;
+  visible?: boolean;
+};
+
+const DEFAULT_COLUMN_CONFIGS: ColumnRecord[] = [
   {
-    id: 74,
-    index_code: "801081",
-    index_name: "半导体",
-    price_change_rate: -0.035751026956252666,
-    etf_latest_scales: 353841454307,
-    turnover: 1.39995908641e7,
-    etf_net_pur_redeem: 3.52094333e9,
-    etf_net_pur_redeem1w: 5.78701443e9,
-    etf_net_pur_redeem1m: 1.3472724e8,
-    chg_rate_d5: -0.039687669848613716,
-    chg_rate_m1: -0.03258423543959288,
-    chg_rate_year: 0.407649355226682,
-    pe_ttm: 75.671972,
-    pe_ttm_percent_y3: 0.93242,
-    pb: 5.763068,
-    pb_percent_y3: 0.93516,
-    dividend_yield_ratio: 0.002433,
-    capital_flow_w8: [
-      { statistic_date: "2025-09-28 00:00:00", week_purchase_redeem: 9.15822591e9 },
-      { statistic_date: "2025-10-05 00:00:00", week_purchase_redeem: 3.92516042e9 },
-      { statistic_date: "2025-10-12 00:00:00", week_purchase_redeem: 1.44511392e10 },
-      { statistic_date: "2025-10-19 00:00:00", week_purchase_redeem: 6.96380759e9 },
-      { statistic_date: "2025-10-26 00:00:00", week_purchase_redeem: -7.2009166e9 },
-      { statistic_date: "2025-11-02 00:00:00", week_purchase_redeem: 7.824913e9 },
-      { statistic_date: "2025-11-09 00:00:00", week_purchase_redeem: -3.97377568e9 },
-      { statistic_date: "2025-11-14 00:00:00", week_purchase_redeem: 5.78701443e9 },
-    ],
-    trade_date: "2025-11-14 00:00:00",
-    source: "SW",
-    index_type: "申万行业",
+    id: 0,
+    key: "price_change_rate",
+    displayName: "实时涨幅",
+    description: "最新价格变动",
+    displayOrder: 1,
   },
   {
-    id: 45,
-    index_code: "801080",
-    index_name: "电子",
-    price_change_rate: -0.030907217518683038,
-    etf_latest_scales: 356885112641,
-    turnover: 2.86783443344e7,
-    etf_net_pur_redeem: 3.47571893e9,
-    etf_net_pur_redeem1w: 5.71575093e9,
-    etf_net_pur_redeem1m: -8.3484226e8,
-    chg_rate_d5: -0.04767260821895247,
-    chg_rate_m1: -0.010913278970980822,
-    chg_rate_year: 0.409024679586828,
-    pe_ttm: 48.433696,
-    pe_ttm_percent_y3: 0.926941,
-    pb: 4.503208,
-    pb_percent_y3: 0.936986,
-    dividend_yield_ratio: 0.00561,
-    capital_flow_w8: [
-      { statistic_date: "2025-09-28 00:00:00", week_purchase_redeem: 9.52440161e9 },
-      { statistic_date: "2025-10-05 00:00:00", week_purchase_redeem: 3.84855122e9 },
-      { statistic_date: "2025-10-12 00:00:00", week_purchase_redeem: 1.43793548e10 },
-      { statistic_date: "2025-10-19 00:00:00", week_purchase_redeem: 6.61237859e9 },
-      { statistic_date: "2025-10-26 00:00:00", week_purchase_redeem: -7.3049988e9 },
-      { statistic_date: "2025-11-02 00:00:00", week_purchase_redeem: 7.7282927e9 },
-      { statistic_date: "2025-11-09 00:00:00", week_purchase_redeem: -4.44299418e9 },
-      { statistic_date: "2025-11-14 00:00:00", week_purchase_redeem: 5.71575093e9 },
-    ],
-    trade_date: "2025-11-14 00:00:00",
-    source: "SW",
-    index_type: "申万行业",
+    id: 0,
+    key: "etf_latest_scales",
+    displayName: "ETF规模",
+    description: "最新规模",
+    displayOrder: 2,
+  },
+  {
+    id: 0,
+    key: "turnover",
+    displayName: "当日成交额",
+    description: "成交额",
+    displayOrder: 3,
+  },
+  {
+    id: 0,
+    key: "etf_net_pur_redeem",
+    displayName: "单日净申赎",
+    description: "当日净申赎",
+    displayOrder: 4,
+  },
+  {
+    id: 0,
+    key: "latest_week_flow",
+    displayName: "近一周净申赎",
+    description: "近周净申赎",
+    displayOrder: 5,
+  },
+  {
+    id: 0,
+    key: "etf_net_pur_redeem1m",
+    displayName: "近1月净申赎",
+    description: "近一月净申赎",
+    displayOrder: 6,
+  },
+  {
+    id: 0,
+    key: "chg_rate_d5",
+    displayName: "近5日涨幅",
+    description: "近五日涨幅",
+    displayOrder: 7,
+  },
+  {
+    id: 0,
+    key: "chg_rate_m1",
+    displayName: "近1月涨幅",
+    description: "近一月涨幅",
+    displayOrder: 8,
+  },
+  {
+    id: 0,
+    key: "chg_rate_year",
+    displayName: "今年涨幅",
+    description: "今年涨幅",
+    displayOrder: 9,
+  },
+  {
+    id: 0,
+    key: "pe_ttm",
+    displayName: "PE",
+    description: "市盈率（TTM）",
+    displayOrder: 10,
+  },
+  {
+    id: 0,
+    key: "pe_ttm_percent_y3",
+    displayName: "PE分位",
+    description: "PE历史分位",
+    displayOrder: 11,
+  },
+  {
+    id: 0,
+    key: "pb",
+    displayName: "PB",
+    description: "市净率",
+    displayOrder: 12,
+  },
+  {
+    id: 0,
+    key: "pb_percent_y3",
+    displayName: "PB分位",
+    description: "PB历史分位",
+    displayOrder: 13,
+  },
+  {
+    id: 0,
+    key: "dividend_yield_ratio",
+    displayName: "股息率",
+    description: "股息率",
+    displayOrder: 14,
+  },
+  {
+    id: 0,
+    key: "roe",
+    displayName: "ROE",
+    description: "净资产收益率（暂无）",
+    displayOrder: 15,
   },
 ];
 
-const toPercent = (value?: number) => {
+const FLOW_COLUMN_KEYS = new Set([
+  "price_change_rate",
+  "etf_latest_scales",
+  "turnover",
+  "etf_net_pur_redeem",
+  "latest_week_flow",
+  "etf_net_pur_redeem1m",
+  "chg_rate_d5",
+  "chg_rate_m1",
+  "chg_rate_year",
+]);
+
+const VALUATION_COLUMN_KEYS = new Set([
+  "pe_ttm",
+  "pe_ttm_percent_y3",
+  "pb",
+  "pb_percent_y3",
+  "dividend_yield_ratio",
+  "roe",
+]);
+
+const toPercent = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return "--";
   }
@@ -118,12 +189,12 @@ const toPercent = (value?: number) => {
   return value > 0 ? `+${percent}%` : `${percent}%`;
 };
 
-const formatLargeNumber = (value?: number) => {
+const formatToChineseUnit = (value?: number | null) => {
   if (value === undefined || value === null) {
     return "--";
   }
   const abs = Math.abs(value);
-  if (abs >= 1e12) {
+  if (abs >= 1e11) {
     return `${(value / 1e12).toFixed(2)} 万亿`;
   }
   if (abs >= 1e8) {
@@ -135,26 +206,35 @@ const formatLargeNumber = (value?: number) => {
   return value.toFixed(2);
 };
 
-const formatDailyTurnover = (value?: number) => {
-  if (value === undefined || value === null) {
+const formatLargeNumber = (value?: number | null) => formatToChineseUnit(value);
+
+const formatDailyTurnover = (value?: number | null) => formatToChineseUnit(value);
+
+const formatSignedChineseUnit = (value?: number | null) => {
+  const formatted = formatToChineseUnit(value);
+  if (formatted === "--") {
     return "--";
   }
-  return `${(value / 1e8).toFixed(2)} 亿`;
+  return `${(value ?? 0) >= 0 ? "+" : ""}${formatted}`;
 };
 
 const latestWeekFlow = (record: IndexRecord) => {
-  const flow = record.capital_flow_w8.at(-1);
+  const flow = record.capital_flow_w8?.at(-1);
   if (!flow) return "--";
   const number = flow.week_purchase_redeem;
-  return `${number >= 0 ? "+" : ""}${(number / 1e8).toFixed(2)} 亿`;
+  if (typeof number !== "number" || Number.isNaN(number)) {
+    return "--";
+  }
+  return formatSignedChineseUnit(number);
 };
 
-const renderPercentValue = (value?: number) => {
+const renderPercentValue = (value?: number | null) => {
   const text = toPercent(value);
   if (text === "--") {
     return <Typography.Text type="secondary">{text}</Typography.Text>;
   }
-  const color = value && value > 0 ? "#f5222d" : value && value < 0 ? "#52c41a" : undefined;
+  const color =
+    value && value > 0 ? "#f5222d" : value && value < 0 ? "#52c41a" : undefined;
   return <Typography.Text style={{ color }}>{text}</Typography.Text>;
 };
 
@@ -193,21 +273,21 @@ const sortValueGetters: Record<
   SortKey,
   (record: IndexRecord) => number | string | null
 > = {
-  price_change_rate: (record) => record.price_change_rate,
-  etf_latest_scales: (record) => record.etf_latest_scales,
-  turnover: (record) => record.turnover,
-  etf_net_pur_redeem: (record) => record.etf_net_pur_redeem,
+  price_change_rate: (record) => record.price_change_rate ?? null,
+  etf_latest_scales: (record) => record.etf_latest_scales ?? null,
+  turnover: (record) => record.turnover ?? null,
+  etf_net_pur_redeem: (record) => record.etf_net_pur_redeem ?? null,
   latest_week_flow: (record) =>
-    record.capital_flow_w8.at(-1)?.week_purchase_redeem ?? null,
-  etf_net_pur_redeem1m: (record) => record.etf_net_pur_redeem1m,
-  chg_rate_d5: (record) => record.chg_rate_d5,
-  chg_rate_m1: (record) => record.chg_rate_m1,
-  chg_rate_year: (record) => record.chg_rate_year,
-  pe_ttm: (record) => record.pe_ttm,
-  pe_ttm_percent_y3: (record) => record.pe_ttm_percent_y3,
-  pb: (record) => record.pb,
-  pb_percent_y3: (record) => record.pb_percent_y3,
-  dividend_yield_ratio: (record) => record.dividend_yield_ratio,
+    record.capital_flow_w8?.at(-1)?.week_purchase_redeem ?? null,
+  etf_net_pur_redeem1m: (record) => record.etf_net_pur_redeem1m ?? null,
+  chg_rate_d5: (record) => record.chg_rate_d5 ?? null,
+  chg_rate_m1: (record) => record.chg_rate_m1 ?? null,
+  chg_rate_year: (record) => record.chg_rate_year ?? null,
+  pe_ttm: (record) => record.pe_ttm ?? null,
+  pe_ttm_percent_y3: (record) => record.pe_ttm_percent_y3 ?? null,
+  pb: (record) => record.pb ?? null,
+  pb_percent_y3: (record) => record.pb_percent_y3 ?? null,
+  dividend_yield_ratio: (record) => record.dividend_yield_ratio ?? null,
   roe: () => null,
 };
 
@@ -218,118 +298,124 @@ type ColumnConfig = {
   column: ColumnType<IndexRecord>;
 };
 
+const COMPACT_COLUMN_WIDTH = 110;
+
 const nameColumn: ColumnType<IndexRecord> = {
   title: "名称",
   dataIndex: "index_name",
   key: "name",
-  width: 180,
+  fixed: "left",
+  width: 140,
   render: (_value, record) => (
-    <Space direction="vertical" size={2}>
-      <Typography.Text strong>{record.index_name}</Typography.Text>
-      <Typography.Text type="secondary">{record.index_code}</Typography.Text>
+    <Space
+      direction="vertical"
+      size={1}
+      style={{ width: 120, alignItems: "flex-start" }}
+    >
+      <Typography.Text
+        strong
+        ellipsis
+        style={{ maxWidth: 120, display: "inline-block" }}
+      >
+        {record.index_name}
+      </Typography.Text>
+      <Typography.Text
+        type="secondary"
+        ellipsis
+        style={{ maxWidth: 120, display: "inline-block" }}
+      >
+        {record.index_code}
+      </Typography.Text>
     </Space>
   ),
 };
 
-const flowColumnConfigs: ColumnConfig[] = [
+
+const COLUMN_METADATA: Record<
+  string,
   {
+    sortKey: SortKey;
+    column: ColumnType<IndexRecord>;
+  }
+> = {
+  price_change_rate: {
     sortKey: "price_change_rate",
     column: {
-      title: "实时涨幅",
       dataIndex: "price_change_rate",
-      key: "change",
+      key: "price_change_rate",
       render: (value) => renderPercentValue(value),
     },
   },
-  {
+  etf_latest_scales: {
     sortKey: "etf_latest_scales",
     column: {
-      title: "ETF规模",
       dataIndex: "etf_latest_scales",
-      key: "scale",
+      key: "etf_latest_scales",
       render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
     },
   },
-  {
+  turnover: {
     sortKey: "turnover",
     column: {
-      title: "当日成交额",
       dataIndex: "turnover",
       key: "turnover",
-      render: (value) => <Typography.Text>{formatDailyTurnover(value)}</Typography.Text>,
+      render: (value) => (
+        <Typography.Text>{formatDailyTurnover(value)}</Typography.Text>
+      ),
     },
   },
-  {
+  etf_net_pur_redeem: {
     sortKey: "etf_net_pur_redeem",
     column: {
-      title: "单日净申赎",
       dataIndex: "etf_net_pur_redeem",
-      key: "net",
+      key: "etf_net_pur_redeem",
       render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
     },
   },
-  {
+  latest_week_flow: {
     sortKey: "latest_week_flow",
     column: {
-      title: "近一周净申赎",
-      key: "weekly",
+      key: "latest_week_flow",
       render: (_value, record) => renderWeekFlowText(record),
     },
   },
-  {
+  etf_net_pur_redeem1m: {
     sortKey: "etf_net_pur_redeem1m",
     column: {
-      title: "近1月净申赎",
       dataIndex: "etf_net_pur_redeem1m",
-      key: "month",
+      key: "etf_net_pur_redeem1m",
       render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
     },
   },
-  {
+  chg_rate_d5: {
     sortKey: "chg_rate_d5",
     column: {
-      title: "近5日涨幅",
       dataIndex: "chg_rate_d5",
-      key: "d5",
+      key: "chg_rate_d5",
       render: (value) => renderPercentValue(value),
     },
   },
-  {
+  chg_rate_m1: {
     sortKey: "chg_rate_m1",
     column: {
-      title: "近1月涨幅",
       dataIndex: "chg_rate_m1",
-      key: "m1",
+      key: "chg_rate_m1",
       render: (value) => renderPercentValue(value),
     },
   },
-  {
+  chg_rate_year: {
     sortKey: "chg_rate_year",
     column: {
-      title: "今年涨幅",
       dataIndex: "chg_rate_year",
-      key: "ytd",
+      key: "chg_rate_year",
       render: (value) => renderPercentValue(value),
     },
   },
-];
-
-const valuationColumnConfigs: ColumnConfig[] = [
-  {
-    sortKey: "price_change_rate",
-    column: {
-      title: "实时涨幅",
-      dataIndex: "price_change_rate",
-      key: "change",
-      render: (value) => renderPercentValue(value),
-    },
-  },
-  {
+  pe_ttm: {
     sortKey: "pe_ttm",
     column: {
-      title: "PE",
       dataIndex: "pe_ttm",
-      key: "pe",
+      key: "pe_ttm",
       render: (value) =>
         value === undefined || value === null ? (
           <Typography.Text type="secondary">--</Typography.Text>
@@ -338,12 +424,11 @@ const valuationColumnConfigs: ColumnConfig[] = [
         ),
     },
   },
-  {
+  pe_ttm_percent_y3: {
     sortKey: "pe_ttm_percent_y3",
     column: {
-      title: "PE分位",
       dataIndex: "pe_ttm_percent_y3",
-      key: "pe_percent",
+      key: "pe_ttm_percent_y3",
       render: (value) =>
         value === undefined || value === null ? (
           <Typography.Text type="secondary">--</Typography.Text>
@@ -352,10 +437,9 @@ const valuationColumnConfigs: ColumnConfig[] = [
         ),
     },
   },
-  {
+  pb: {
     sortKey: "pb",
     column: {
-      title: "PB",
       dataIndex: "pb",
       key: "pb",
       render: (value) =>
@@ -366,12 +450,11 @@ const valuationColumnConfigs: ColumnConfig[] = [
         ),
     },
   },
-  {
+  pb_percent_y3: {
     sortKey: "pb_percent_y3",
     column: {
-      title: "PB分位",
       dataIndex: "pb_percent_y3",
-      key: "pb_percent",
+      key: "pb_percent_y3",
       render: (value) =>
         value === undefined || value === null ? (
           <Typography.Text type="secondary">--</Typography.Text>
@@ -380,65 +463,52 @@ const valuationColumnConfigs: ColumnConfig[] = [
         ),
     },
   },
-  {
+  dividend_yield_ratio: {
+    sortKey: "dividend_yield_ratio",
+    column: {
+      dataIndex: "dividend_yield_ratio",
+      key: "dividend_yield_ratio",
+      render: (value) =>
+        value === undefined || value === null ? (
+          <Typography.Text type="secondary">--</Typography.Text>
+        ) : (
+          <Typography.Text>{`${(value * 100).toFixed(2)}%`}</Typography.Text>
+        ),
+    },
+  },
+  roe: {
     sortKey: "roe",
     column: {
-      title: "ROE",
       key: "roe",
       render: () => <Typography.Text type="secondary">--</Typography.Text>,
     },
   },
-  {
-    sortKey: "dividend_yield_ratio",
-    column: {
-      title: "股息率",
-      dataIndex: "dividend_yield_ratio",
-      key: "dividend",
-      render: (value) =>
-        value === undefined || value === null ? (
-          <Typography.Text type="secondary">--</Typography.Text>
-        ) : (
-          <Typography.Text>{`${(value * 100).toFixed(2)}%`}</Typography.Text>
-        ),
-    },
-  },
-  {
-    sortKey: "etf_latest_scales",
-    column: {
-      title: "ETF规模",
-      dataIndex: "etf_latest_scales",
-      key: "scale",
-      render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
-    },
-  },
-  {
-    sortKey: "chg_rate_d5",
-    column: {
-      title: "近5日涨幅",
-      dataIndex: "chg_rate_d5",
-      key: "d5",
-      render: (value) => renderPercentValue(value),
-    },
-  },
-  {
-    sortKey: "chg_rate_m1",
-    column: {
-      title: "近1月涨幅",
-      dataIndex: "chg_rate_m1",
-      key: "m1",
-      render: (value) => renderPercentValue(value),
-    },
-  },
-  {
-    sortKey: "chg_rate_year",
-    column: {
-      title: "今年涨幅",
-      dataIndex: "chg_rate_year",
-      key: "ytd",
-      render: (value) => renderPercentValue(value),
-    },
-  },
-];
+};
+
+const buildColumnConfigs = (
+  configs: ColumnRecord[],
+  keySet: Set<string>
+): ColumnConfig[] =>
+  configs
+    .filter((item) => keySet.has(item.key) && item.visible !== false)
+    .sort((a, b) =>
+      a.displayOrder === b.displayOrder ? a.id - b.id : a.displayOrder - b.displayOrder
+    )
+    .map((item) => {
+      const meta = COLUMN_METADATA[item.key];
+      if (!meta) {
+        return null;
+      }
+      return {
+        sortKey: meta.sortKey,
+        column: {
+          ...meta.column,
+          title: item.displayName,
+          key: item.key,
+        },
+      };
+    })
+    .filter((value): value is ColumnConfig => Boolean(value));
 
 const compareValues = (a: string | number | null, b: string | number | null) => {
   if (a === null && b === null) return 0;
@@ -468,9 +538,14 @@ const sortRecords = (
 };
 
 export default function Home() {
-  const [records, setRecords] = useState<IndexRecord[]>(MOCK_RECORDS);
+  const [records, setRecords] = useState<IndexRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
+  const [columnConfigs, setColumnConfigs] = useState<ColumnRecord[]>(
+    DEFAULT_COLUMN_CONFIGS
+  );
 
   const [flowSortConfig, setFlowSortConfig] = useState<TableSortState>({
     key: null,
@@ -490,17 +565,93 @@ export default function Home() {
     [records, valuationSortConfig]
   );
 
-  const handleSortToggle = (table: TableType, key: SortKey) => {
-    const setter =
-      table === "flow" ? setFlowSortConfig : setValuationSortConfig;
-    setter((prev) => {
-      if (prev.key === key) {
-        const nextOrder =
-          prev.order === "asc" ? "desc" : prev.order === "desc" ? null : "asc";
-        return nextOrder ? { key, order: nextOrder } : { key: null, order: null };
+  const loadColumnConfigs = useCallback(async () => {
+    try {
+      const response = await fetch("/api/columns");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || "加载列配置失败");
       }
-      return { key, order: "asc" };
-    });
+      const payload = (await response.json()) as ColumnRecord[];
+      const sorted = [...payload].sort(
+        (a, b) => a.displayOrder - b.displayOrder
+      );
+      setColumnConfigs(sorted);
+    } catch (error) {
+      console.error("加载列配置失败：", error);
+      message.error((error as Error).message || "加载列配置失败");
+    }
+  }, []);
+
+  useEffect(() => {
+    loadColumnConfigs();
+  }, [loadColumnConfigs]);
+
+  const loadRecords = useCallback(async (date?: string) => {
+    setLoading(true);
+    try {
+      const suffix = date ? `?date=${date}` : "";
+      const response = await fetch(`/api/records${suffix}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(
+          payload?.message || "拉取数据失败，请稍后重试"
+        );
+      }
+      const payload = await response.json();
+      setRecords(payload.data ?? []);
+      setAvailableDates(payload.availableDates ?? []);
+      setLastFetchAt(payload.lastFetchAt ?? null);
+      if (!date) {
+        setSelectedDate((prev) =>
+          prev ?? payload.currentDate ?? payload.availableDates?.[0] ?? null
+        );
+      }
+      return payload.currentDate ?? payload.availableDates?.[0] ?? null;
+    } catch (error) {
+      console.error(error);
+      message.error((error as Error).message || "获取数据失败");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecords();
+  }, [loadRecords]);
+
+  const flowColumnConfigs = useMemo(
+    () => buildColumnConfigs(columnConfigs, FLOW_COLUMN_KEYS),
+    [columnConfigs]
+  );
+  const valuationColumnConfigs = useMemo(
+    () => buildColumnConfigs(columnConfigs, VALUATION_COLUMN_KEYS),
+    [columnConfigs]
+  );
+
+  const handleDateChange = (value: string) => {
+    setSelectedDate(value);
+    loadRecords(value);
+  };
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/records/refresh", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "主动刷新失败");
+      }
+      const payload = await response.json();
+      message.success(`刷新已触发，处理 ${payload.count ?? 0} 条`);
+    } catch (error) {
+      message.error((error as Error).message || "刷新失败");
+    } finally {
+      await loadRecords(selectedDate ?? undefined);
+    }
   };
 
   const renderSortableTitle = (
@@ -524,40 +675,51 @@ export default function Home() {
     );
   };
 
-  const buildColumns = (configs: ColumnConfig[], table: TableType) =>
-    configs.map(({ sortKey, column }) => ({
-      ...column,
-      title: renderSortableTitle(column.title as string, sortKey, table),
-      onHeaderCell: () => ({
-        style: { cursor: "pointer", userSelect: "none" },
-        onClick: () => handleSortToggle(table, sortKey),
-      }),
-    }));
+  const handleSortToggle = (table: TableType, key: SortKey) => {
+    const setter =
+      table === "flow" ? setFlowSortConfig : setValuationSortConfig;
+    setter((prev) => {
+      if (prev.key === key) {
+        const nextOrder =
+          prev.order === "asc" ? "desc" : prev.order === "desc" ? null : "asc";
+        return nextOrder ? { key, order: nextOrder } : { key: null, order: null };
+      }
+      return { key, order: "asc" };
+    });
+  };
+
+  const sortableHeaderStyle: CSSProperties = {
+    cursor: "pointer",
+    userSelect: "none",
+  };
+
+  const buildColumns = (
+    configs: ColumnConfig[],
+    table: TableType
+  ): ColumnType<IndexRecord>[] =>
+    configs.map(({ sortKey, column }) => {
+      const baseColumn = {
+        ...column,
+        width: column.width ?? COMPACT_COLUMN_WIDTH,
+        ellipsis: column.ellipsis ?? true,
+        align: column.align ?? "right",
+      };
+      return {
+        ...baseColumn,
+        title: renderSortableTitle(baseColumn.title as string, sortKey, table),
+        onHeaderCell: () =>
+          ({
+            style: sortableHeaderStyle,
+            onClick: () => handleSortToggle(table, sortKey),
+          } satisfies HTMLAttributes<any> & TdHTMLAttributes<any>),
+      };
+    });
 
   const flowColumns = [nameColumn, ...buildColumns(flowColumnConfigs, "flow")];
-  const valuationColumns = [nameColumn, ...buildColumns(valuationColumnConfigs, "valuation")];
-
-  const fetchRecords = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/records");
-      if (!response.ok) {
-        throw new Error("拉取数据失败");
-      }
-      const payload = await response.json();
-      const newRecords: IndexRecord[] = payload?.data?.records ?? [];
-      if (!newRecords.length) {
-        throw new Error("接口返回为空");
-      }
-      setRecords(newRecords);
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error(error);
-      message.error((error as Error).message || "获取数据失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const valuationColumns = [
+    nameColumn,
+    ...buildColumns(valuationColumnConfigs, "valuation"),
+  ];
 
   const tabItems = [
     {
@@ -571,7 +733,9 @@ export default function Home() {
           loading={loading}
           rowKey="id"
           pagination={false}
-          scroll={{ x: 1200 }}
+          size="small"
+          tableLayout="fixed"
+          scroll={{ x: "max-content" }}
         />
       ),
     },
@@ -586,7 +750,9 @@ export default function Home() {
           loading={loading}
           rowKey="id"
           pagination={false}
-          scroll={{ x: 1200 }}
+          size="small"
+          tableLayout="fixed"
+          scroll={{ x: "max-content" }}
         />
       ),
     },
@@ -602,20 +768,32 @@ export default function Home() {
           <Space direction="vertical" size="large" className="w-full">
             <Space
               align="center"
-              justify="space-between"
-              className="w-full flex-wrap gap-4"
+              className="w-full justify-between flex-wrap gap-4"
             >
               <div>
                 <Typography.Title level={2}>行业指数洞察</Typography.Title>
                 <Typography.Text type="secondary">
-                  名称在最左，右侧各列展示资金流向/估值指标，该列点击可排序。
+                  名称在最左，右侧各列为资金流向或估值指标，点击表头切换排序。
                 </Typography.Text>
               </div>
-              <Space wrap>
+              <Space wrap align="center">
                 <Typography.Text type="secondary">
-                  最后更新时间：{lastUpdated.toLocaleString()}
+                  当前数据日期：{selectedDate ?? "--"}
                 </Typography.Text>
-                <Button type="primary" loading={loading} onClick={fetchRecords}>
+                <Select
+                  value={selectedDate ?? undefined}
+                  options={availableDates.map((date) => ({
+                    label: date,
+                    value: date,
+                  }))}
+                  placeholder="筛选日期"
+                  onChange={handleDateChange}
+                  style={{ minWidth: 160 }}
+                />
+                <Typography.Text type="secondary">
+                  最近同步：{lastFetchAt ? new Date(lastFetchAt).toLocaleString() : "--"}
+                </Typography.Text>
+                <Button type="primary" loading={loading} onClick={handleRefresh}>
                   手动获取数据
                 </Button>
               </Space>

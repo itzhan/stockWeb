@@ -6,12 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start-with-cron": "sh ./scripts/start-with-cron.sh",
+    "cron": "node ./scripts/cron.mjs",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
     "lint": "eslint"
   },
   "dependencies": {
-    "antd": "^5",
     "@ant-design/icons": "^5",
+    "@prisma/client": "^5",
+    "antd": "^5",
     "next": "16.0.3",
+    "node-cron": "^3",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -22,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
+    "prisma": "^5",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

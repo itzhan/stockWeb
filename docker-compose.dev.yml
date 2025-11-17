@@ -1,0 +1,44 @@
+version: "3.9"
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["sh", "-c", "./scripts/generate-env.sh && npm run prisma:push && npm run dev"]
+    ports:
+      - "3080:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespwd@db:5432/stock?schema=public
+      ADMIN_USER: admin
+      ADMIN_PASS: admin
+      APP_URL: http://localhost:3080
+      REMOTE_API_URL: https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=3%2C4&page=1&rows=200&order=etf_net_pur_redeem&order_type=-1
+    volumes:
+      - .:/usr/src/app:cached
+      - node_modules:/usr/src/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespwd}
+      POSTGRES_DB: ${POSTGRES_DB:-stock}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-stock}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  node_modules:

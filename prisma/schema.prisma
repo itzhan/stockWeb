@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String?
+  role      String   @default("viewer")
+  createdAt DateTime @default(now())
+}
+
+model ColumnName {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  displayName String
+  displayOrder Int     @default(0)
+  description String?
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model IndexData {
+  id                 Int      @id @default(autoincrement())
+  indexCode          String
+  indexName          String
+  source             String?
+  tradeDate          DateTime
+  priceChangeRate    Float?
+  etfLatestScales    Float?
+  turnover           Float?
+  etfNetPurRedeem    Float?
+  etfNetPurRedeem1w  Float?
+  etfNetPurRedeem1m  Float?
+  chgRateD5          Float?
+  chgRateM1          Float?
+  chgRateYear        Float?
+  peTtm              Float?
+  peTtmPercentY3     Float?
+  pb                 Float?
+  pbPercentY3        Float?
+  dividendYieldRatio Float?
+  capitalFlowW8      Json?
+  rawData            Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([indexCode, tradeDate])
+  @@index([tradeDate])
+}
