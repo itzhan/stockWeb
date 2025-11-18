@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 declare module "@prisma/client" {
 export class PrismaClient {
   constructor(options?: { log?: string[] });
@@ -6,9 +7,7 @@ export class PrismaClient {
 
   export namespace Prisma {
     export type JsonValue = string | number | boolean | JsonObject | JsonArray | null;
-    export interface JsonObject {
-      [key: string]: JsonValue;
-    }
+    export interface JsonObject extends Record<string, JsonValue> {}
     export interface JsonArray extends Array<JsonValue> {}
   }
 

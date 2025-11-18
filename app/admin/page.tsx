@@ -700,7 +700,9 @@ export default function AdminPage() {
   ) => {
     dragColumnId.current = recordId;
     event.dataTransfer?.setData("text/plain", recordId.toString());
-    event.dataTransfer?.setDropEffect?.("move");
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
   };
 
   const handleRowDragEnd = () => {
@@ -904,7 +906,7 @@ export default function AdminPage() {
       case "users":
         return (
           <Card type="inner" style={{ borderRadius: 16 }}>
-            <Space align="center" justify="space-between" className="w-full">
+            <Space align="center" className="flex w-full justify-between">
               <Typography.Title level={4}>用户管理</Typography.Title>
               <Button type="primary" onClick={() => openUserModal()}>
                 新增用户
@@ -923,7 +925,7 @@ export default function AdminPage() {
       case "columns":
         return (
           <Card type="inner" style={{ borderRadius: 16 }}>
-            <Space align="center" justify="space-between" className="w-full">
+            <Space align="center" className="flex w-full justify-between">
               <div>
                 <Typography.Title level={4}>字段配置</Typography.Title>
                 <Typography.Text type="secondary">
@@ -1018,8 +1020,7 @@ export default function AdminPage() {
           <Card type="inner" style={{ borderRadius: 16 }}>
             <Space
               align="center"
-              justify="space-between"
-              className="w-full"
+              className="flex w-full justify-between"
               wrap
             >
               <div>

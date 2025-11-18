@@ -494,7 +494,7 @@ const buildColumnConfigs = (
   configs: ColumnRecord[],
   keySet: Set<string>,
 ): ColumnConfig[] =>
-  configs
+  (configs
     .filter((item) => keySet.has(item.key) && item.visible !== false)
     .sort((a, b) =>
       a.displayOrder === b.displayOrder
@@ -515,7 +515,7 @@ const buildColumnConfigs = (
         },
       };
     })
-    .filter((value): value is ColumnConfig => Boolean(value));
+    .filter(Boolean)) as ColumnConfig[];
 
 const compareValues = (
   a: string | number | null,
@@ -745,7 +745,8 @@ export default function Home() {
           ({
             style: headerStyle,
             onClick: () => handleSortToggle(table, sortKey),
-          }) satisfies HTMLAttributes<any> & TdHTMLAttributes<any>,
+          }) satisfies HTMLAttributes<HTMLTableCellElement> &
+          TdHTMLAttributes<HTMLTableCellElement>,
         onCell: () => ({
           style: cellStyle,
         }),
