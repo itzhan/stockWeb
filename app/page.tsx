@@ -191,7 +191,7 @@ const toPercent = (value?: number | null) => {
   return value > 0 ? `+${percent}%` : `${percent}%`;
 };
 
-const formatToChineseUnit = (value?: number | null) => {
+const formatWithChineseUnits = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return "--";
   }
@@ -206,12 +206,29 @@ const formatToChineseUnit = (value?: number | null) => {
   return `${(value / 1e4).toFixed(2)} 万`;
 };
 
-const formatLargeNumber = (value?: number | null) => formatToChineseUnit(value);
+const formatLargeNumber = formatWithChineseUnits;
 
-const formatDailyTurnover = (value?: number | null) => formatToChineseUnit(value);
+/**
+ * 后端 turnover 单位为「万元」，显示上需要与 etf_latest_scales 一致（按元 → 万/亿/万亿）
+ */
+const normalizeTurnoverToYuan = (value?: number | null) => {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return null;
+  }
+  // 万元 -> 元
+  return value * 1e4;
+};
+
+const formatTurnoverFromWanYuan = (value?: number | null) => {
+  const normalized = normalizeTurnoverToYuan(value);
+  if (normalized === null) {
+    return "--";
+  }
+  return formatWithChineseUnits(normalized);
+};
 
 const formatSignedChineseUnit = (value?: number | null) => {
-  const formatted = formatToChineseUnit(value);
+  const formatted = formatWithChineseUnits(value);
   if (formatted === "--") {
     return "--";
   }
@@ -275,7 +292,8 @@ const sortValueGetters: Record<
 > = {
   price_change_rate: (record) => record.price_change_rate ?? null,
   etf_latest_scales: (record) => record.etf_latest_scales ?? null,
-  turnover: (record) => record.turnover ?? null,
+  // 这里也用「元」维度进行抽取，但即使保持万元，排序结果也不会变，只是更语义化
+  turnover: (record) => normalizeTurnoverToYuan(record.turnover),
   etf_net_pur_redeem: (record) => record.etf_net_pur_redeem ?? null,
   latest_week_flow: (record) =>
     record.capital_flow_w8?.at(-1)?.week_purchase_redeem ?? null,
@@ -354,7 +372,7 @@ const COLUMN_METADATA: Record<
       dataIndex: "turnover",
       key: "turnover",
       render: (value) => (
-        <Typography.Text>{formatDailyTurnover(value)}</Typography.Text>
+        <Typography.Text>{formatTurnoverFromWanYuan(value)}</Typography.Text>
       ),
     },
   },

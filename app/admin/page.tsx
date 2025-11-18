@@ -604,31 +604,22 @@ export default function AdminPage() {
   }, [loadStockRecords, stockSelectedDate]);
 
   const persistColumnOrder = useCallback(
-    async (changedColumns: ColumnRecord[]) => {
-      if (!changedColumns.length) {
+    async (orderedColumns: ColumnRecord[]) => {
+      if (!orderedColumns.length) {
         return;
       }
       try {
-        await Promise.all(
-          changedColumns.map((column) =>
-            authFetch("/api/admin/columns", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                id: column.id,
-                displayName: column.displayName,
-                description: column.description ?? null,
-                displayOrder: column.displayOrder,
-                visible: column.visible,
-              }),
-            }).then(async (response) => {
-              if (!response.ok) {
-                const payload = await response.json().catch(() => null);
-                throw new Error(payload?.message || "排序保存失败");
-              }
-            })
-          )
-        );
+        const response = await authFetch("/api/admin/columns/order", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            columnIds: orderedColumns.map((column) => column.id),
+          }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.message || "排序保存失败");
+        }
       } catch (error) {
         console.error("排序同步失败：", error);
         message.error("排序保存失败，已恢复最新列配置");
@@ -678,18 +669,8 @@ export default function AdminPage() {
       if (!reordered) {
         return;
       }
-      const displayOrderMap = columns.reduce<Record<number, number>>(
-        (acc, column) => {
-          acc[column.id] = column.displayOrder;
-          return acc;
-        },
-        {}
-      );
-      const changedColumns = reordered.filter(
-        (column) => displayOrderMap[column.id] !== column.displayOrder
-      );
       setColumns(reordered);
-      await persistColumnOrder(changedColumns);
+      await persistColumnOrder(reordered);
     },
     [columns, otherColumnKeys, persistColumnOrder]
   );
