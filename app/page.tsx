@@ -305,7 +305,7 @@ const nameColumn: ColumnType<IndexRecord> = {
   dataIndex: "index_name",
   key: "name",
   fixed: "left",
-  width: 80,
+  width: 95,
   render: (_value, record) => (
     <Space
       direction="vertical"
@@ -805,7 +805,7 @@ export default function Home() {
               <div>
                 <Typography.Title level={2}>行业指数洞察</Typography.Title>
                 <Typography.Text type="secondary">
-                  此数据摘取于沪深两市交易所官方数据，交易日第二天盘前8点30分更新，该数据不作为投资依据，仅供投资参考。
+                  此数据摘取于沪深两市交易所官方数据，次日盘前8点30分更新，该数据不作为投资依据，仅供投资参考。
                 </Typography.Text>
               </div>
               <Space wrap align="center">
