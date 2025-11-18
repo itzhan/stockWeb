@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  CSSProperties,
-  HTMLAttributes,
-  TdHTMLAttributes,
-} from "react";
+import type { CSSProperties, HTMLAttributes, TdHTMLAttributes } from "react";
 import {
   Button,
   Card,
@@ -173,11 +169,17 @@ const FLOW_COLUMN_KEYS = new Set([
 ]);
 
 const VALUATION_COLUMN_KEYS = new Set([
+  "price_change_rate",
   "pe_ttm",
   "pe_ttm_percent_y3",
+  "roe",
   "pb",
   "pb_percent_y3",
   "dividend_yield_ratio",
+  "etf_latest_scales",
+  "chg_rate_d5",
+  "chg_rate_m1",
+  "chg_rate_year",
   "roe",
 ]);
 
@@ -190,11 +192,11 @@ const toPercent = (value?: number | null) => {
 };
 
 const formatToChineseUnit = (value?: number | null) => {
-  if (value === undefined || value === null) {
+  if (value === undefined || value === null || Number.isNaN(value)) {
     return "--";
   }
   const abs = Math.abs(value);
-  if (abs >= 1e11) {
+  if (abs >= 1e12) {
     return `${(value / 1e12).toFixed(2)} 万亿`;
   }
   if (abs >= 1e8) {
@@ -208,7 +210,12 @@ const formatToChineseUnit = (value?: number | null) => {
 
 const formatLargeNumber = (value?: number | null) => formatToChineseUnit(value);
 
-const formatDailyTurnover = (value?: number | null) => formatToChineseUnit(value);
+const formatDailyTurnover = (value?: number | null) => {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return "--";
+  }
+  return formatToChineseUnit(value * 1e8);
+};
 
 const formatSignedChineseUnit = (value?: number | null) => {
   const formatted = formatToChineseUnit(value);
@@ -330,7 +337,6 @@ const nameColumn: ColumnType<IndexRecord> = {
   ),
 };
 
-
 const COLUMN_METADATA: Record<
   string,
   {
@@ -351,7 +357,9 @@ const COLUMN_METADATA: Record<
     column: {
       dataIndex: "etf_latest_scales",
       key: "etf_latest_scales",
-      render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
+      render: (value) => (
+        <Typography.Text>{formatLargeNumber(value)}</Typography.Text>
+      ),
     },
   },
   turnover: {
@@ -369,7 +377,9 @@ const COLUMN_METADATA: Record<
     column: {
       dataIndex: "etf_net_pur_redeem",
       key: "etf_net_pur_redeem",
-      render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
+      render: (value) => (
+        <Typography.Text>{formatLargeNumber(value)}</Typography.Text>
+      ),
     },
   },
   latest_week_flow: {
@@ -384,7 +394,9 @@ const COLUMN_METADATA: Record<
     column: {
       dataIndex: "etf_net_pur_redeem1m",
       key: "etf_net_pur_redeem1m",
-      render: (value) => <Typography.Text>{formatLargeNumber(value)}</Typography.Text>,
+      render: (value) => (
+        <Typography.Text>{formatLargeNumber(value)}</Typography.Text>
+      ),
     },
   },
   chg_rate_d5: {
@@ -487,12 +499,14 @@ const COLUMN_METADATA: Record<
 
 const buildColumnConfigs = (
   configs: ColumnRecord[],
-  keySet: Set<string>
+  keySet: Set<string>,
 ): ColumnConfig[] =>
   configs
     .filter((item) => keySet.has(item.key) && item.visible !== false)
     .sort((a, b) =>
-      a.displayOrder === b.displayOrder ? a.id - b.id : a.displayOrder - b.displayOrder
+      a.displayOrder === b.displayOrder
+        ? a.id - b.id
+        : a.displayOrder - b.displayOrder,
     )
     .map((item) => {
       const meta = COLUMN_METADATA[item.key];
@@ -510,7 +524,10 @@ const buildColumnConfigs = (
     })
     .filter((value): value is ColumnConfig => Boolean(value));
 
-const compareValues = (a: string | number | null, b: string | number | null) => {
+const compareValues = (
+  a: string | number | null,
+  b: string | number | null,
+) => {
   if (a === null && b === null) return 0;
   if (a === null) return -1;
   if (b === null) return 1;
@@ -522,7 +539,7 @@ const compareValues = (a: string | number | null, b: string | number | null) => 
 
 const sortRecords = (
   records: IndexRecord[],
-  config: TableSortState
+  config: TableSortState,
 ): IndexRecord[] => {
   if (!config.key || !config.order) {
     return records;
@@ -544,25 +561,26 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
   const [columnConfigs, setColumnConfigs] = useState<ColumnRecord[]>(
-    DEFAULT_COLUMN_CONFIGS
+    DEFAULT_COLUMN_CONFIGS,
   );
 
   const [flowSortConfig, setFlowSortConfig] = useState<TableSortState>({
     key: null,
     order: null,
   });
-  const [valuationSortConfig, setValuationSortConfig] = useState<TableSortState>({
-    key: null,
-    order: null,
-  });
+  const [valuationSortConfig, setValuationSortConfig] =
+    useState<TableSortState>({
+      key: null,
+      order: null,
+    });
 
   const sortedFlowRecords = useMemo(
     () => sortRecords(records, flowSortConfig),
-    [records, flowSortConfig]
+    [records, flowSortConfig],
   );
   const sortedValuationRecords = useMemo(
     () => sortRecords(records, valuationSortConfig),
-    [records, valuationSortConfig]
+    [records, valuationSortConfig],
   );
 
   const loadColumnConfigs = useCallback(async () => {
@@ -574,7 +592,7 @@ export default function Home() {
       }
       const payload = (await response.json()) as ColumnRecord[];
       const sorted = [...payload].sort(
-        (a, b) => a.displayOrder - b.displayOrder
+        (a, b) => a.displayOrder - b.displayOrder,
       );
       setColumnConfigs(sorted);
     } catch (error) {
@@ -594,17 +612,16 @@ export default function Home() {
       const response = await fetch(`/api/records${suffix}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(
-          payload?.message || "拉取数据失败，请稍后重试"
-        );
+        throw new Error(payload?.message || "拉取数据失败，请稍后重试");
       }
       const payload = await response.json();
       setRecords(payload.data ?? []);
       setAvailableDates(payload.availableDates ?? []);
       setLastFetchAt(payload.lastFetchAt ?? null);
       if (!date) {
-        setSelectedDate((prev) =>
-          prev ?? payload.currentDate ?? payload.availableDates?.[0] ?? null
+        setSelectedDate(
+          (prev) =>
+            prev ?? payload.currentDate ?? payload.availableDates?.[0] ?? null,
         );
       }
       return payload.currentDate ?? payload.availableDates?.[0] ?? null;
@@ -623,11 +640,11 @@ export default function Home() {
 
   const flowColumnConfigs = useMemo(
     () => buildColumnConfigs(columnConfigs, FLOW_COLUMN_KEYS),
-    [columnConfigs]
+    [columnConfigs],
   );
   const valuationColumnConfigs = useMemo(
     () => buildColumnConfigs(columnConfigs, VALUATION_COLUMN_KEYS),
-    [columnConfigs]
+    [columnConfigs],
   );
 
   const handleDateChange = (value: string) => {
@@ -650,14 +667,17 @@ export default function Home() {
     } catch (error) {
       message.error((error as Error).message || "刷新失败");
     } finally {
-      await loadRecords(selectedDate ?? undefined);
+      const latestDate = await loadRecords();
+      if (latestDate) {
+        setSelectedDate(latestDate);
+      }
     }
   };
 
   const renderSortableTitle = (
     label: string,
     sortKey: SortKey,
-    table: TableType
+    table: TableType,
   ) => {
     const config = table === "flow" ? flowSortConfig : valuationSortConfig;
     const isActive = config.key === sortKey;
@@ -668,8 +688,12 @@ export default function Home() {
       <Space size={4}>
         <span>{label}</span>
         <div className="flex flex-col items-center text-[10px]">
-          <CaretUpOutlined style={{ color: upActive ? "#1677ff" : "#bfbfbf" }} />
-          <CaretDownOutlined style={{ color: downActive ? "#1677ff" : "#bfbfbf" }} />
+          <CaretUpOutlined
+            style={{ color: upActive ? "#1677ff" : "#bfbfbf" }}
+          />
+          <CaretDownOutlined
+            style={{ color: downActive ? "#1677ff" : "#bfbfbf" }}
+          />
         </div>
       </Space>
     );
@@ -682,7 +706,9 @@ export default function Home() {
       if (prev.key === key) {
         const nextOrder =
           prev.order === "asc" ? "desc" : prev.order === "desc" ? null : "asc";
-        return nextOrder ? { key, order: nextOrder } : { key: null, order: null };
+        return nextOrder
+          ? { key, order: nextOrder }
+          : { key: null, order: null };
       }
       return { key, order: "asc" };
     });
@@ -692,28 +718,47 @@ export default function Home() {
     cursor: "pointer",
     userSelect: "none",
   };
+  const activeColumnHeaderStyle: CSSProperties = {
+    backgroundColor: "#fffbea",
+  };
+  const activeColumnCellStyle: CSSProperties = {
+    backgroundColor: "#fffdf3",
+  };
 
   const buildColumns = (
     configs: ColumnConfig[],
-    table: TableType
-  ): ColumnType<IndexRecord>[] =>
-    configs.map(({ sortKey, column }) => {
+    table: TableType,
+  ): ColumnType<IndexRecord>[] => {
+    const tableSortConfig =
+      table === "flow" ? flowSortConfig : valuationSortConfig;
+    return configs.map(({ sortKey, column }) => {
+      const isActive =
+        tableSortConfig.key === sortKey && tableSortConfig.order !== null;
       const baseColumn = {
         ...column,
         width: column.width ?? COMPACT_COLUMN_WIDTH,
         ellipsis: column.ellipsis ?? true,
         align: column.align ?? "right",
       };
+      const headerStyle = {
+        ...sortableHeaderStyle,
+        ...(isActive ? activeColumnHeaderStyle : {}),
+      };
+      const cellStyle = isActive ? activeColumnCellStyle : undefined;
       return {
         ...baseColumn,
         title: renderSortableTitle(baseColumn.title as string, sortKey, table),
         onHeaderCell: () =>
           ({
-            style: sortableHeaderStyle,
+            style: headerStyle,
             onClick: () => handleSortToggle(table, sortKey),
-          } satisfies HTMLAttributes<any> & TdHTMLAttributes<any>),
+          }) satisfies HTMLAttributes<any> & TdHTMLAttributes<any>,
+        onCell: () => ({
+          style: cellStyle,
+        }),
       };
     });
+  };
 
   const flowColumns = [nameColumn, ...buildColumns(flowColumnConfigs, "flow")];
   const valuationColumns = [
@@ -791,9 +836,14 @@ export default function Home() {
                   style={{ minWidth: 160 }}
                 />
                 <Typography.Text type="secondary">
-                  最近同步：{lastFetchAt ? new Date(lastFetchAt).toLocaleString() : "--"}
+                  最近同步：
+                  {lastFetchAt ? new Date(lastFetchAt).toLocaleString() : "--"}
                 </Typography.Text>
-                <Button type="primary" loading={loading} onClick={handleRefresh}>
+                <Button
+                  type="primary"
+                  loading={loading}
+                  onClick={handleRefresh}
+                >
                   手动获取数据
                 </Button>
               </Space>
