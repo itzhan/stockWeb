@@ -11,13 +11,13 @@ services:
       ADMIN_USER: admin
       ADMIN_PASS: admin
       APP_URL: http://localhost:3080
-      REMOTE_API_URL: https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=3%2C4&page=1&rows=200&order=etf_net_pur_redeem&order_type=-1
+      CRON_APP_URL: http://localhost:3000
+      REMOTE_API_URL: https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=3%2C4&page=1&rows=1000&order=price_change_rate&order_type=1
     volumes:
       - .:/usr/src/app:cached
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
   db:
     image: postgres:15
     environment:
@@ -34,6 +34,5 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: unless-stopped
 volumes:
   postgres-data:

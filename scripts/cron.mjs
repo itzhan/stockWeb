@@ -1,7 +1,10 @@
 import cron from "node-cron";
 
-const APP_URL =
-  (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+const APP_URL = (
+  process.env.CRON_APP_URL ??
+  process.env.APP_URL ??
+  "http://localhost:3000"
+).replace(/\/+$/, "");
 const REFRESH_ENDPOINT = `${APP_URL}/api/records/refresh`;
 
 const runRefresh = async () => {
@@ -30,6 +33,7 @@ const runRefresh = async () => {
   }
 };
 
+console.log(`[cron] 定时任务已初始化，等待北京时间 8.32 触发`);
 const job = cron.schedule(
   "32 8 * * *",
   () => {
@@ -42,6 +46,7 @@ const job = cron.schedule(
 );
 
 job.start();
+console.log(`[cron] 任务启动完成，下一次预计执行：北京时间 11:16`);
 
 const shutdown = () => {
   job.stop();

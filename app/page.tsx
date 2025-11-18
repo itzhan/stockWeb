@@ -195,27 +195,20 @@ const formatToChineseUnit = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return "--";
   }
-  const abs = Math.abs(value);
-  if (abs >= 1e12) {
+  const valueInYi = value / 1e8;
+  const absValueInYi = Math.abs(valueInYi);
+  if (absValueInYi >= 1000) {
     return `${(value / 1e12).toFixed(2)} 万亿`;
   }
-  if (abs >= 1e8) {
-    return `${(value / 1e8).toFixed(2)} 亿`;
+  if (absValueInYi >= 1) {
+    return `${valueInYi.toFixed(2)} 亿`;
   }
-  if (abs >= 1e4) {
-    return `${(value / 1e4).toFixed(2)} 万`;
-  }
-  return value.toFixed(2);
+  return `${(value / 1e4).toFixed(2)} 万`;
 };
 
 const formatLargeNumber = (value?: number | null) => formatToChineseUnit(value);
 
-const formatDailyTurnover = (value?: number | null) => {
-  if (value === undefined || value === null || Number.isNaN(value)) {
-    return "--";
-  }
-  return formatToChineseUnit(value * 1e8);
-};
+const formatDailyTurnover = (value?: number | null) => formatToChineseUnit(value);
 
 const formatSignedChineseUnit = (value?: number | null) => {
   const formatted = formatToChineseUnit(value);
