@@ -18,6 +18,7 @@ import {
   Typography,
   Switch,
   Tabs,
+  Tag,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { MenuProps } from "antd";
@@ -25,9 +26,11 @@ import type { MenuProps } from "antd";
 type UserRecord = {
   id: number;
   username: string;
-  role: string;
   email?: string | null;
+  role: string;
   createdAt: string;
+  membershipExpiresAt?: string | null;
+  passwordHash?: string | null;
 };
 
 type ColumnRecord = {
@@ -51,8 +54,9 @@ type OverviewPayload = {
 
 type UserFormValues = {
   username: string;
-  email?: string;
   role: string;
+  password?: string;
+  confirmPassword?: string;
 };
 
 type ColumnFormValues = {
@@ -76,6 +80,18 @@ type StockRecord = {
   pb?: number | null;
 };
 
+type ActivationCodeRecord = {
+  id: number;
+  code: string;
+  durationDays: number;
+  note?: string | null;
+  used: boolean;
+  usedAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  usedBy?: { id: number; username: string } | null;
+};
+
 const formatPercentValue = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return "--";
@@ -91,7 +107,7 @@ const formatNumberValue = (value?: number | null) => {
   return new Intl.NumberFormat("zh-CN").format(value);
 };
 
-type AdminSection = "overview" | "users" | "columns" | "stocks";
+type AdminSection = "overview" | "users" | "columns" | "stocks" | "activationCodes";
 
 const ADMIN_SECTIONS: { key: AdminSection; label: string; description: string }[] =
   [
@@ -114,6 +130,11 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; description: string }[
       key: "stocks",
       label: "股票数据",
       description: "按日期查看指标数据",
+    },
+    {
+      key: "activationCodes",
+      label: "激活码",
+      description: "生成与管理激活码",
     },
   ];
 
@@ -213,6 +234,13 @@ export default function AdminPage() {
   const [stockLastFetchAt, setStockLastFetchAt] = useState<string | null>(null);
   const [stockRefreshing, setStockRefreshing] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
+  const [activationCodes, setActivationCodes] = useState<ActivationCodeRecord[]>([]);
+  const [activationLoading, setActivationLoading] = useState(false);
+  const [activationModalVisible, setActivationModalVisible] = useState(false);
+  const [activationCreating, setActivationCreating] = useState(false);
+  const [createdCodes, setCreatedCodes] = useState<string[]>([]);
+  const [activationForm] = Form.useForm();
+  const [userSearch, setUserSearch] = useState("");
 
   const handleSessionExpired = useCallback(() => {
     message.warning("登录信息已失效，请重新登录");
@@ -293,6 +321,12 @@ export default function AdminPage() {
     }
   }, [authFetch]);
 
+  const filteredUsers = useMemo(() => {
+    if (!userSearch.trim()) return users;
+    const keyword = userSearch.trim().toLowerCase();
+    return users.filter((u) => u.username.toLowerCase().includes(keyword));
+  }, [users, userSearch]);
+
   const fetchColumns = useCallback(async () => {
     setColumnsLoading(true);
     try {
@@ -315,6 +349,25 @@ export default function AdminPage() {
     }
   }, [authFetch]);
 
+  const fetchActivationCodes = useCallback(async () => {
+    setActivationLoading(true);
+    try {
+      const response = await authFetch("/api/admin/activation-codes");
+      if (!response.ok) {
+        if (response.status === 401) {
+          return;
+        }
+        throw new Error("加载激活码失败");
+      }
+      const payload: ActivationCodeRecord[] = await response.json();
+      setActivationCodes(payload);
+    } catch (error) {
+      message.error((error as Error).message || "加载激活码失败");
+    } finally {
+      setActivationLoading(false);
+    }
+  }, [authFetch]);
+
   const loadStockRecords = useCallback(async (date?: string | null) => {
     setStockLoading(true);
     try {
@@ -322,7 +375,7 @@ export default function AdminPage() {
       if (date) {
         params.set("date", date);
       }
-      const response = await fetch(
+      const response = await authFetch(
         `/api/records${params.toString() ? `?${params.toString()}` : ""}`
       );
       if (!response.ok) {
@@ -344,15 +397,23 @@ export default function AdminPage() {
     } finally {
       setStockLoading(false);
     }
-  }, []);
+  }, [authFetch]);
 
   useEffect(() => {
     if (!isLogged) return;
     fetchOverview();
     fetchUsers();
     fetchColumns();
+    fetchActivationCodes();
     loadStockRecords();
-  }, [isLogged, fetchOverview, fetchUsers, fetchColumns, loadStockRecords]);
+  }, [
+    isLogged,
+    fetchOverview,
+    fetchUsers,
+    fetchColumns,
+    fetchActivationCodes,
+    loadStockRecords,
+  ]);
 
   const handleLogin = async (values: { username: string; password: string }) => {
     setAuthSubmitting(true);
@@ -383,7 +444,6 @@ export default function AdminPage() {
       setEditingUser(user);
       userForm.setFieldsValue({
         username: user.username,
-        email: user.email ?? undefined,
         role: user.role,
       });
     } else {
@@ -403,11 +463,14 @@ export default function AdminPage() {
   const handleUserSubmit = async (values: UserFormValues) => {
     setModalSavingUser(true);
     try {
+      if (values.password && values.password !== values.confirmPassword) {
+        throw new Error("两次输入的密码不一致");
+      }
       const payload = {
         username: values.username.trim(),
-        email: values.email?.trim() ?? null,
         role: values.role,
         ...(editingUser ? { id: editingUser.id } : {}),
+        ...(values.password ? { password: values.password } : {}),
       } as Record<string, unknown>;
       const response = await authFetch("/api/admin/users", {
         method: editingUser ? "PUT" : "POST",
@@ -586,7 +649,7 @@ export default function AdminPage() {
   const handleStockRefresh = useCallback(async () => {
     setStockRefreshing(true);
     try {
-      const response = await fetch("/api/records/refresh", {
+      const response = await authFetch("/api/records/refresh", {
         method: "POST",
       });
       if (!response.ok) {
@@ -602,6 +665,56 @@ export default function AdminPage() {
       await loadStockRecords(stockSelectedDate ?? undefined);
     }
   }, [loadStockRecords, stockSelectedDate]);
+
+  const openActivationModal = () => {
+    activationForm.resetFields();
+    activationForm.setFieldsValue({
+      count: 10,
+      durationDays: 30,
+    });
+    setCreatedCodes([]);
+    setActivationModalVisible(true);
+  };
+
+  const handleCreateActivation = async (values: { count: number; durationDays: number; note?: string }) => {
+    setActivationCreating(true);
+    try {
+      const response = await authFetch("/api/admin/activation-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "生成失败");
+      }
+      message.success(`成功生成 ${result.created ?? values.count} 条激活码`);
+      setCreatedCodes(result.codes ?? []);
+      fetchActivationCodes();
+    } catch (error) {
+      message.error((error as Error).message || "生成失败");
+    } finally {
+      setActivationCreating(false);
+    }
+  };
+
+  const handleDeleteActivation = async (id: number) => {
+    try {
+      const response = await authFetch("/api/admin/activation-codes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "删除失败");
+      }
+      message.success("激活码已删除");
+      fetchActivationCodes();
+    } catch (error) {
+      message.error((error as Error).message || "删除失败");
+    }
+  };
 
   const persistColumnOrder = useCallback(
     async (orderedColumns: ColumnRecord[]) => {
@@ -692,8 +805,19 @@ export default function AdminPage() {
 
   const userTableColumns: ColumnsType<UserRecord> = [
     { title: "用户名", dataIndex: "username", key: "username" },
-    { title: "角色", dataIndex: "role", key: "role" },
-    { title: "邮箱", dataIndex: "email", key: "email" },
+    {
+      title: "密码",
+      dataIndex: "passwordHash",
+      key: "passwordHash",
+      render: (value) => (value ? "已设置" : "未设置"),
+    },
+    {
+      title: "会员有效期",
+      dataIndex: "membershipExpiresAt",
+      key: "membershipExpiresAt",
+      render: (value) =>
+        value ? new Date(value).toLocaleString() : "未开通/已过期",
+    },
     {
       title: "创建时间",
       dataIndex: "createdAt",
@@ -828,6 +952,78 @@ export default function AdminPage() {
     },
   ];
 
+  const activationCodeColumns: ColumnsType<ActivationCodeRecord> = [
+    { title: "激活码", dataIndex: "code", key: "code", width: 200 },
+    {
+      title: "天数",
+      dataIndex: "durationDays",
+      key: "durationDays",
+      width: 90,
+      align: "right",
+    },
+    {
+      title: "备注",
+      dataIndex: "note",
+      key: "note",
+      ellipsis: true,
+      render: (value) => value ?? "--",
+    },
+    {
+      title: "使用情况",
+      dataIndex: "used",
+      key: "used",
+      render: (_value, record) =>
+        record.used ? (
+          <Tag color="green">已使用</Tag>
+        ) : (
+          <Tag color="blue">未使用</Tag>
+        ),
+    },
+    {
+      title: "使用者",
+      dataIndex: "usedBy",
+      key: "usedBy",
+      render: (value) => value?.username ?? "--",
+    },
+    {
+      title: "使用时间",
+      dataIndex: "usedAt",
+      key: "usedAt",
+      render: (value) => (value ? new Date(value).toLocaleString() : "--"),
+    },
+    {
+      title: "创建时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      render: (value) => new Date(value).toLocaleString(),
+    },
+    {
+      title: "过期时间",
+      dataIndex: "expiresAt",
+      key: "expiresAt",
+      render: (value) => (value ? new Date(value).toLocaleString() : "--"),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      render: (_value, record) => (
+        <Space>
+          <Popconfirm
+            title="确认删除该激活码？"
+            okText="确认"
+            cancelText="取消"
+            onConfirm={() => handleDeleteActivation(record.id)}
+            disabled={record.used}
+          >
+            <Button type="link" danger disabled={record.used}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   const flowColumnData = useMemo(
     () => columns.filter((item) => FLOW_COLUMN_KEYS.has(item.key)),
     [columns]
@@ -889,16 +1085,25 @@ export default function AdminPage() {
           <Card type="inner" style={{ borderRadius: 16 }}>
             <Space align="center" className="flex w-full justify-between">
               <Typography.Title level={4}>用户管理</Typography.Title>
-              <Button type="primary" onClick={() => openUserModal()}>
-                新增用户
-              </Button>
+              <Space>
+                <Input.Search
+                  allowClear
+                  placeholder="按用户名搜索"
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  style={{ width: 200 }}
+                />
+                <Button type="primary" onClick={() => openUserModal()}>
+                  新增用户
+                </Button>
+              </Space>
             </Space>
             <Table
               columns={userTableColumns}
-              dataSource={users}
+              dataSource={filteredUsers}
               rowKey="id"
-              pagination={false}
+              pagination={{ pageSize: 10 }}
               size="small"
+              scroll={{ y: 420 }}
               loading={usersLoading}
             />
           </Card>
@@ -1047,10 +1252,55 @@ export default function AdminPage() {
                 pagination={false}
                 size="small"
                 loading={stockLoading}
-                scroll={{ x: "max-content" }}
+                scroll={{ x: "max-content", y: 520 }}
                 className="min-w-full"
               />
             </div>
+          </Card>
+        );
+      case "activationCodes":
+        return (
+          <Card type="inner" style={{ borderRadius: 16 }}>
+            <Space align="center" className="flex w-full justify-between" wrap>
+              <div>
+                <Typography.Title level={4}>激活码管理</Typography.Title>
+                <Typography.Text type="secondary">
+                  支持批量生成激活码，查看使用与删除未用码。
+                </Typography.Text>
+              </div>
+              <Space>
+                <Button onClick={fetchActivationCodes}>刷新</Button>
+                <Button type="primary" onClick={openActivationModal}>
+                  生成激活码
+                </Button>
+              </Space>
+            </Space>
+            <Table
+              className="mt-4"
+              columns={activationCodeColumns}
+              dataSource={activationCodes}
+              rowKey="id"
+              size="small"
+              loading={activationLoading}
+              pagination={{ pageSize: 20 }}
+              scroll={{ x: "max-content", y: 420 }}
+            />
+            {createdCodes.length > 0 && (
+              <Card
+                type="inner"
+                title="本次生成的激活码"
+                className="mt-4"
+                extra={<Typography.Text type="secondary">请及时保存</Typography.Text>}
+              >
+                <Space direction="vertical">
+                  {createdCodes.map((item) => (
+                    <Typography.Text key={item} copyable>
+                      {item}
+                    </Typography.Text>
+                  ))}
+                </Space>
+              </Card>
+            )}
           </Card>
         );
       default:
@@ -1145,15 +1395,18 @@ export default function AdminPage() {
           >
             <Input />
           </Form.Item>
-          <Form.Item label="邮箱" name="email">
-            <Input />
-          </Form.Item>
           <Form.Item
             label="角色"
             name="role"
             rules={[{ required: true, message: "请选择角色" }]}
           >
             <Select options={ROLE_OPTIONS} />
+          </Form.Item>
+          <Form.Item label="密码" name="password">
+            <Input.Password placeholder={editingUser ? "留空则不修改" : ""} />
+          </Form.Item>
+          <Form.Item label="确认密码" name="confirmPassword">
+            <Input.Password placeholder={editingUser ? "留空则不修改" : ""} />
           </Form.Item>
         </Form>
       </Modal>
@@ -1198,6 +1451,41 @@ export default function AdminPage() {
           </Form.Item>
           <Form.Item label="描述" name="description">
             <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="生成激活码"
+        open={activationModalVisible}
+        onOk={() => activationForm.submit()}
+        onCancel={() => setActivationModalVisible(false)}
+        confirmLoading={activationCreating}
+        okText="生成"
+        cancelText="取消"
+      >
+        <Form
+          form={activationForm}
+          layout="vertical"
+          onFinish={handleCreateActivation}
+          initialValues={{ count: 10, durationDays: 30 }}
+        >
+          <Form.Item
+            label="生成数量"
+            name="count"
+            rules={[{ required: true, message: "请输入数量" }]}
+          >
+            <InputNumber min={1} max={200} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            label="会员天数"
+            name="durationDays"
+            rules={[{ required: true, message: "请输入会员有效天数" }]}
+          >
+            <InputNumber min={1} max={3650} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="备注" name="note">
+            <Input placeholder="可填写渠道或用途" />
           </Form.Item>
         </Form>
       </Modal>

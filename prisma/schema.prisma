@@ -12,7 +12,25 @@ model User {
   username  String   @unique
   email     String?
   role      String   @default("viewer")
+  passwordHash String?
+  passwordSalt String?
+  membershipExpiresAt DateTime?
   createdAt DateTime @default(now())
+
+  activationCodes ActivationCode[] @relation("UserActivationCodes")
+}
+
+model ActivationCode {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique
+  durationDays Int
+  note         String?
+  used         Boolean  @default(false)
+  usedAt       DateTime?
+  usedBy       User?    @relation("UserActivationCodes", fields: [usedById], references: [id])
+  usedById     Int?
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
 }
 
 model ColumnName {

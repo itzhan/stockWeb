@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdminAuth } from "@/lib/auth";
+import { hashPassword } from "@/lib/userAuth";
 
 const parseBody = async (request: Request) => {
   try {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
       { status: 401 }
     );
   }
-  const { username, email, role } = await parseBody(request);
+  const { username, email, role, password } = await parseBody(request);
   if (!username) {
     return NextResponse.json(
       { message: "用户名为必填项" },
@@ -43,11 +44,20 @@ export async function POST(request: Request) {
   }
 
   try {
+    let passwordHash: string | undefined;
+    let passwordSalt: string | undefined;
+    if (password) {
+      const hashed = hashPassword(password);
+      passwordHash = hashed.hash;
+      passwordSalt = hashed.salt;
+    }
     const user = await prisma.user.create({
       data: {
         username,
         email: email ?? null,
         role: role ?? "viewer",
+        passwordHash: passwordHash ?? null,
+        passwordSalt: passwordSalt ?? null,
       },
     });
     return NextResponse.json(user);
@@ -69,7 +79,7 @@ export async function PUT(request: Request) {
       { status: 401 }
     );
   }
-  const { id, username, email, role } = await parseBody(request);
+  const { id, username, email, role, password } = await parseBody(request);
   if (!id) {
     return NextResponse.json({ message: "用户 ID 不存在" }, { status: 400 });
   }
@@ -81,13 +91,19 @@ export async function PUT(request: Request) {
   }
 
   try {
+    const data: Record<string, unknown> = {
+      username,
+      email: email ?? null,
+      role,
+    };
+    if (password) {
+      const hashed = hashPassword(password);
+      data.passwordHash = hashed.hash;
+      data.passwordSalt = hashed.salt;
+    }
     const user = await prisma.user.update({
       where: { id },
-      data: {
-        username,
-        email: email ?? null,
-        role,
-      },
+      data,
     });
     return NextResponse.json(user);
   } catch (error) {

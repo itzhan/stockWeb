@@ -6,9 +6,14 @@ import {
   Button,
   Card,
   Divider,
+  Drawer,
+  Form,
+  Input,
   message,
+  Modal,
   Select,
   Space,
+  Tag,
   Table,
   Tabs,
   Typography,
@@ -46,6 +51,15 @@ type ColumnRecord = {
   description?: string | null;
   displayOrder: number;
   visible?: boolean;
+};
+
+type UserProfile = {
+  id: number;
+  username: string;
+  role: string;
+  createdAt: string;
+  membershipExpiresAt: string | null;
+  hasMembership: boolean;
 };
 
 const DEFAULT_COLUMN_CONFIGS: ColumnRecord[] = [
@@ -559,6 +573,18 @@ const sortRecords = (
 };
 
 export default function Home() {
+  const [userToken, setUserToken] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authTab, setAuthTab] = useState<"login" | "register">("login");
+  const [centerOpen, setCenterOpen] = useState(false);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [loginForm] = Form.useForm();
+  const [registerForm] = Form.useForm();
+  const [redeemForm] = Form.useForm();
+  const [redeemFormCenter] = Form.useForm();
   const [records, setRecords] = useState<IndexRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -578,6 +604,157 @@ export default function Home() {
       order: null,
     });
 
+  const handleLogout = useCallback((silent = false) => {
+    localStorage.removeItem("userToken");
+    setUserToken(null);
+    setProfile(null);
+    setRecords([]);
+    setAvailableDates([]);
+    setSelectedDate(null);
+    setLastFetchAt(null);
+    if (!silent) {
+      message.success("已退出登录");
+    }
+  }, []);
+
+  const userAuthFetch = useCallback(
+    async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers ?? undefined);
+      if (userToken) {
+        headers.set("Authorization", `Bearer ${userToken}`);
+      }
+      const response = await fetch(input, { ...init, headers });
+      if (response.status === 401) {
+        handleLogout(true);
+      }
+      return response;
+    },
+    [userToken, handleLogout]
+  );
+
+  const fetchProfile = useCallback(
+    async (token?: string) => {
+      const currentToken = token ?? userToken;
+      if (!currentToken) {
+      setProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+    setProfileLoading(true);
+    try {
+      const response = await fetch("/api/auth/profile", {
+        headers: { Authorization: `Bearer ${currentToken}` },
+      });
+      if (!response.ok) {
+        throw new Error("未登录");
+      }
+      const payload = (await response.json()) as UserProfile;
+      setProfile(payload);
+      setUserToken(currentToken);
+      localStorage.setItem("userToken", currentToken);
+    } catch {
+      handleLogout(true);
+    } finally {
+      setProfileLoading(false);
+    }
+  },
+  [handleLogout, userToken]
+);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("userToken");
+    if (stored) {
+      fetchProfile(stored);
+    } else {
+      setProfileLoading(false);
+    }
+  }, [fetchProfile]);
+
+  const handleAuthSuccess = (token: string, profileData: UserProfile) => {
+    localStorage.setItem("userToken", token);
+    setUserToken(token);
+    setProfile(profileData);
+    setAuthModalOpen(false);
+    loginForm.resetFields();
+    registerForm.resetFields();
+  };
+
+  const handleLoginSubmit = async (values: { username: string; password: string }) => {
+    setAuthSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || "登录失败");
+      }
+      handleAuthSuccess(payload.token, payload.profile);
+      message.success("登录成功");
+    } catch (error) {
+      message.error((error as Error).message || "登录失败");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (values: {
+    username: string;
+    password: string;
+    confirmPassword: string;
+  }) => {
+    if (values.password !== values.confirmPassword) {
+      message.error("两次输入的密码不一致");
+      return;
+    }
+    setAuthSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || "注册失败");
+      }
+      handleAuthSuccess(payload.token, payload.profile);
+      message.success("注册成功");
+    } catch (error) {
+      message.error((error as Error).message || "注册失败");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleRedeem = async (values: { code: string }, form?: { resetFields: () => void }) => {
+    if (!values.code) {
+      message.error("请输入激活码");
+      return;
+    }
+    setRedeeming(true);
+    try {
+      const response = await userAuthFetch("/api/auth/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: values.code }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || "兑换失败");
+      }
+      message.success("兑换成功，会员已更新");
+      form?.resetFields();
+      setProfile(payload.profile);
+    } catch (error) {
+      message.error((error as Error).message || "兑换失败");
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
   const sortedFlowRecords = useMemo(
     () => sortRecords(records, flowSortConfig),
     [records, flowSortConfig],
@@ -588,8 +765,9 @@ export default function Home() {
   );
 
   const loadColumnConfigs = useCallback(async () => {
+    if (!userToken) return;
     try {
-      const response = await fetch("/api/columns");
+      const response = await userAuthFetch("/api/columns");
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.message || "加载列配置失败");
@@ -603,17 +781,14 @@ export default function Home() {
       console.error("加载列配置失败：", error);
       message.error((error as Error).message || "加载列配置失败");
     }
-  }, []);
-
-  useEffect(() => {
-    loadColumnConfigs();
-  }, [loadColumnConfigs]);
+  }, [userAuthFetch, userToken]);
 
   const loadRecords = useCallback(async (date?: string) => {
+    if (!userToken) return null;
     setLoading(true);
     try {
       const suffix = date ? `?date=${date}` : "";
-      const response = await fetch(`/api/records${suffix}`);
+      const response = await userAuthFetch(`/api/records${suffix}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.message || "拉取数据失败，请稍后重试");
@@ -636,11 +811,16 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userAuthFetch, userToken]);
 
   useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
+    if (profile?.hasMembership) {
+      loadColumnConfigs();
+      loadRecords();
+    } else {
+      setRecords([]);
+    }
+  }, [profile?.hasMembership, loadColumnConfigs, loadRecords]);
 
   const flowColumnConfigs = useMemo(
     () => buildColumnConfigs(columnConfigs, FLOW_COLUMN_KEYS),
@@ -659,7 +839,7 @@ export default function Home() {
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/records/refresh", {
+      const response = await userAuthFetch("/api/records/refresh", {
         method: "POST",
       });
       if (!response.ok) {
@@ -808,56 +988,339 @@ export default function Home() {
     },
   ];
 
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen bg-[#f4f6fb] py-10">
+        <main className="mx-auto w-full max-w-6xl px-4">
+          <Card style={{ borderRadius: 20 }}>
+            <Typography.Text>正在校验登录状态...</Typography.Text>
+          </Card>
+          {/* 保持 form 实例已挂载，避免 antd useForm 警告 */}
+          <div style={{ display: "none" }}>
+            <Form form={loginForm} />
+            <Form form={registerForm} />
+            <Form form={redeemForm} />
+            <Form form={redeemFormCenter} />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const membershipText =
+    profile?.membershipExpiresAt && profile.membershipExpiresAt
+      ? new Date(profile.membershipExpiresAt).toLocaleString()
+      : profile?.role === "admin"
+        ? "管理员"
+        : "未激活";
+
   return (
     <div className="min-h-screen bg-[#f4f6fb] py-10">
       <main className="mx-auto w-full max-w-6xl px-4">
         <Card
           style={{ borderRadius: 20, background: "#fff" }}
-          bodyStyle={{ padding: "32px" }}
+          styles={{ body: { padding: 32 } }}
         >
-          <Space direction="vertical" size="large" className="w-full">
-            <Space
-              align="center"
-              className="w-full justify-between flex-wrap gap-4"
-            >
-              <div>
-                <Typography.Title level={2}>行业指数洞察</Typography.Title>
-                <Typography.Text type="secondary">
-                  此数据摘取于沪深两市交易所官方数据，次日盘前8点30分更新，该数据不作为投资依据，仅供投资参考。
-                </Typography.Text>
-              </div>
-              <Space wrap align="center">
-                <Typography.Text type="secondary">
-                  当前数据日期：{selectedDate ?? "--"}
-                </Typography.Text>
-                <Select
-                  value={selectedDate ?? undefined}
-                  options={availableDates.map((date) => ({
-                    label: date,
-                    value: date,
-                  }))}
-                  placeholder="筛选日期"
-                  onChange={handleDateChange}
-                  style={{ minWidth: 160 }}
-                />
-                <Typography.Text type="secondary">
-                  最近同步：
-                  {lastFetchAt ? new Date(lastFetchAt).toLocaleString() : "--"}
-                </Typography.Text>
+          {!profile && (
+            <Space direction="vertical" size="large" className="w-full">
+              <Typography.Title level={2}>行业指数洞察</Typography.Title>
+              <Typography.Text type="secondary">
+                登录后可查看完整资金流向与估值数据。
+              </Typography.Text>
+              <Space>
                 <Button
                   type="primary"
-                  loading={loading}
-                  onClick={handleRefresh}
+                  onClick={() => {
+                    setAuthTab("login");
+                    setAuthModalOpen(true);
+                  }}
                 >
-                  手动获取数据
+                  登录
+                </Button>
+                <Button
+                  onClick={() => {
+                    setAuthTab("register");
+                    setAuthModalOpen(true);
+                  }}
+                >
+                  注册
                 </Button>
               </Space>
             </Space>
-            <Divider />
-            <Tabs items={tabItems} type="card" />
-          </Space>
+          )}
+
+          {profile && !profile.hasMembership && (
+            <Space direction="vertical" size="large" className="w-full">
+              <Space
+                align="center"
+                className="w-full justify-between flex-wrap gap-4"
+              >
+                <div>
+                  <Typography.Title level={2}>会员专属内容</Typography.Title>
+                  <Typography.Text type="secondary">
+                    您已登录，但当前还不是会员。请先兑换激活码或添加微信购买。
+                  </Typography.Text>
+                </div>
+                <Space>
+                  <Button onClick={() => setCenterOpen(true)}>个人中心</Button>
+                  <Button danger onClick={() => handleLogout()}>
+                    退出登录
+                  </Button>
+                </Space>
+              </Space>
+              <Divider />
+              <div className="grid gap-8 md:grid-cols-[1.2fr,1fr] items-center">
+                <div>
+                  <Typography.Title level={4}>立即兑换激活码</Typography.Title>
+                  <Form
+                    form={redeemForm}
+                    layout="vertical"
+                    onFinish={(values) => handleRedeem(values, redeemForm)}
+                  >
+                    <Form.Item
+                      label="激活码"
+                      name="code"
+                      rules={[{ required: true, message: "请输入激活码" }]}
+                    >
+                      <Input placeholder="输入您获得的激活码" />
+                    </Form.Item>
+                    <Form.Item>
+                      <Button
+                        type="primary"
+                        htmlType="submit"
+                        loading={redeeming}
+                      >
+                        立即激活
+                      </Button>
+                    </Form.Item>
+                  </Form>
+                  <Typography.Text type="secondary">
+                    还没有激活码？请添加右侧微信获取购买信息。
+                  </Typography.Text>
+                </div>
+                <div className="flex items-center justify-center">
+                  <img
+                    src="https://avator-1319906908.cos.ap-shanghai.myqcloud.com/gupiao/gupiaowx.png"
+                    alt="微信二维码"
+                    width={220}
+                    height={220}
+                    style={{ borderRadius: 12, border: "1px solid #f0f0f0" }}
+                  />
+                </div>
+              </div>
+            </Space>
+          )}
+
+          {profile?.hasMembership && (
+            <Space direction="vertical" size="large" className="w-full">
+              <Space
+                align="center"
+                className="w-full justify-between flex-wrap gap-4"
+              >
+                <div>
+                  <Typography.Title level={2}>行业指数洞察</Typography.Title>
+                  <Typography.Text type="secondary">
+                    数据来源于沪深交易所，每日盘前 8:30 更新，仅供参考。
+                  </Typography.Text>
+                </div>
+                <Space align="center" wrap>
+                  <Button onClick={() => setCenterOpen(true)}>个人中心</Button>
+                  <Button danger onClick={() => handleLogout()}>
+                    退出登录
+                  </Button>
+                </Space>
+              </Space>
+              <Space
+                align="center"
+                className="w-full justify-between flex-wrap gap-4"
+              >
+                <Space wrap align="center">
+                  <Typography.Text type="secondary">
+                    当前数据日期：{selectedDate ?? "--"}
+                  </Typography.Text>
+                  <Select
+                    value={selectedDate ?? undefined}
+                    options={availableDates.map((date) => ({
+                      label: date,
+                      value: date,
+                    }))}
+                    placeholder="筛选日期"
+                    onChange={handleDateChange}
+                    style={{ minWidth: 160 }}
+                  />
+                  <Typography.Text type="secondary">
+                    最近同步：
+                    {lastFetchAt
+                      ? new Date(lastFetchAt).toLocaleString()
+                      : "--"}
+                  </Typography.Text>
+                </Space>
+                {profile.role === "admin" && (
+                  <Button
+                    type="primary"
+                    loading={loading}
+                    onClick={handleRefresh}
+                  >
+                    手动获取数据
+                  </Button>
+                )}
+              </Space>
+              <Divider />
+              <Tabs items={tabItems} type="card" />
+            </Space>
+          )}
         </Card>
       </main>
+
+      <Modal
+        title={authTab === "login" ? "登录" : "注册"}
+        open={authModalOpen}
+        onCancel={() => setAuthModalOpen(false)}
+        footer={null}
+        destroyOnHidden
+      >
+        <Tabs
+          activeKey={authTab}
+          onChange={(key) => setAuthTab(key as "login" | "register")}
+          items={[
+            {
+              key: "login",
+              label: "登录",
+              children: (
+                <Form
+                  layout="vertical"
+                  form={loginForm}
+                  onFinish={handleLoginSubmit}
+                >
+                  <Form.Item
+                    label="用户名"
+                    name="username"
+                    rules={[{ required: true, message: "请输入用户名" }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  <Form.Item
+                    label="密码"
+                    name="password"
+                    rules={[{ required: true, message: "请输入密码" }]}
+                  >
+                    <Input.Password />
+                  </Form.Item>
+                  <Form.Item>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={authSubmitting}
+                      block
+                    >
+                      登录
+                    </Button>
+                  </Form.Item>
+                </Form>
+              ),
+            },
+            {
+              key: "register",
+              label: "注册",
+              children: (
+                <Form
+                  layout="vertical"
+                  form={registerForm}
+                  onFinish={handleRegisterSubmit}
+                >
+                  <Form.Item
+                    label="用户名"
+                    name="username"
+                    rules={[{ required: true, message: "请输入用户名" }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  <Form.Item
+                    label="密码"
+                    name="password"
+                    rules={[{ required: true, message: "请输入密码" }]}
+                  >
+                    <Input.Password />
+                  </Form.Item>
+                  <Form.Item
+                    label="确认密码"
+                    name="confirmPassword"
+                    rules={[{ required: true, message: "请再次输入密码" }]}
+                  >
+                    <Input.Password />
+                  </Form.Item>
+                  <Form.Item>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={authSubmitting}
+                      block
+                    >
+                      注册
+                    </Button>
+                  </Form.Item>
+                </Form>
+              ),
+            },
+          ]}
+        />
+      </Modal>
+
+      <Drawer
+        title="个人中心"
+        placement="right"
+        width={360}
+        onClose={() => setCenterOpen(false)}
+        open={centerOpen}
+      >
+        {profile ? (
+          <Space direction="vertical" className="w-full">
+            <Typography.Text strong>用户名：{profile.username}</Typography.Text>
+            <Typography.Text type="secondary">
+              注册时间：{new Date(profile.createdAt).toLocaleString()}
+            </Typography.Text>
+            <Typography.Text>
+              会员状态：
+              {profile.hasMembership ? (
+                <Tag color="green">有效期至 {membershipText}</Tag>
+              ) : (
+                <Tag color="red">未开通</Tag>
+              )}
+            </Typography.Text>
+            <Divider />
+            <Typography.Title level={5}>兑换激活码</Typography.Title>
+            <Form
+              form={redeemFormCenter}
+              layout="vertical"
+              onFinish={(values) => handleRedeem(values, redeemFormCenter)}
+            >
+              <Form.Item
+                label="激活码"
+                name="code"
+                rules={[{ required: true, message: "请输入激活码" }]}
+              >
+                <Input placeholder="输入激活码" />
+              </Form.Item>
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={redeeming}
+                  block
+                >
+                  立即兑换
+                </Button>
+              </Form.Item>
+            </Form>
+            <Divider />
+            <Button danger onClick={() => handleLogout()}>
+              退出登录
+            </Button>
+          </Space>
+        ) : (
+          <Typography.Text>请先登录</Typography.Text>
+        )}
+      </Drawer>
     </div>
   );
 }

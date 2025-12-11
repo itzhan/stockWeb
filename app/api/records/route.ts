@@ -5,8 +5,23 @@ import {
   mapIndexData,
   normalizeTradeDate,
 } from "./service";
+import { requireMembership } from "@/lib/userSession";
+import { requireAdminAuth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
+  try {
+    await requireMembership(request);
+  } catch {
+    try {
+      requireAdminAuth(request);
+    } catch (error) {
+      return NextResponse.json(
+        { message: (error as Error).message || "未授权" },
+        { status: 401 }
+      );
+    }
+  }
+
   const { searchParams } = request.nextUrl;
   const dateParam = searchParams.get("date");
   const normalizedDate =
