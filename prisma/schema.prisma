@@ -46,6 +46,7 @@ model ColumnName {
 
 model IndexData {
   id                 Int      @id @default(autoincrement())
+  category           String   @default("industry")
   indexCode          String
   indexName          String
   source             String?
@@ -69,6 +70,7 @@ model IndexData {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  @@unique([indexCode, tradeDate])
+  @@unique([indexCode, tradeDate, category])
   @@index([tradeDate])
+  @@index([category, tradeDate])
 }

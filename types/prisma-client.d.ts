@@ -13,6 +13,7 @@ export class PrismaClient {
 
   export type IndexData = {
     id: number;
+    category: string;
     indexCode: string;
     indexName: string;
     source: string | null;

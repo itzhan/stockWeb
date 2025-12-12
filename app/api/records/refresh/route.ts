@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { fetchRemoteRecords, refreshRemoteRecords } from "../service";
 import { requireMembership } from "@/lib/userSession";
 import { requireAdminAuth } from "@/lib/auth";
+import type { RecordCategory } from "../service";
+
+const normalizeCategory = (value: string | null): RecordCategory =>
+  value === "theme" ? "theme" : "industry";
 
 export async function POST(request: Request) {
   let isAdmin = false;
@@ -19,6 +23,8 @@ export async function POST(request: Request) {
     }
   }
   try {
+    const { searchParams } = new URL(request.url);
+    const category = normalizeCategory(searchParams.get("category"));
     if (isAdmin) {
       const count = await refreshRemoteRecords();
       return NextResponse.json({
@@ -29,10 +35,11 @@ export async function POST(request: Request) {
       });
     }
 
-    const data = await fetchRemoteRecords();
+    const data = await fetchRemoteRecords(category);
     return NextResponse.json({
       success: true,
       data,
+      category,
       count: data.length,
       timestamp: new Date().toISOString(),
       stored: false,

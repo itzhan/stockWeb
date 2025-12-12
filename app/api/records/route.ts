@@ -7,6 +7,10 @@ import {
 } from "./service";
 import { requireMembership } from "@/lib/userSession";
 import { requireAdminAuth } from "@/lib/auth";
+import type { RecordCategory } from "./service";
+
+const normalizeCategory = (value: string | null): RecordCategory =>
+  value === "theme" ? "theme" : "industry";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,6 +28,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl;
   const dateParam = searchParams.get("date");
+  const category = normalizeCategory(searchParams.get("category"));
   const normalizedDate =
     dateParam && !Number.isNaN(Date.parse(dateParam))
       ? normalizeTradeDate(dateParam)
@@ -31,6 +36,7 @@ export async function GET(request: NextRequest) {
 
   const groupedDates = (await prisma.indexData.groupBy({
     by: ["tradeDate"],
+    where: { category },
     orderBy: { tradeDate: "desc" },
   })) as { tradeDate: Date }[];
 
@@ -47,6 +53,7 @@ export async function GET(request: NextRequest) {
   const records = effectiveDate
     ? await prisma.indexData.findMany({
         where: {
+          category,
           tradeDate: {
             gte: effectiveDate,
             lt: new Date(effectiveDate.getTime() + 24 * 60 * 60 * 1000),
@@ -57,6 +64,7 @@ export async function GET(request: NextRequest) {
     : [];
 
   const latestUpdate = await prisma.indexData.findFirst({
+    where: { category },
     orderBy: { updatedAt: "desc" },
     select: { updatedAt: true },
   });
@@ -66,6 +74,7 @@ export async function GET(request: NextRequest) {
     availableDates,
     currentDate: effectiveDate ? formatDateKey(effectiveDate) : null,
     lastFetchAt: latestUpdate?.updatedAt?.toISOString() ?? null,
+    category,
   };
 
   return NextResponse.json(response);

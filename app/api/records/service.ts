@@ -6,6 +6,10 @@ const REMOTE_API_URL =
   process.env.REMOTE_API_URL ??
   "https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=3%2C4&page=1&rows=1000&order=price_change_rate&order_type=1";
 
+const REMOTE_THEME_API_URL =
+  process.env.REMOTE_THEME_API_URL ??
+  "https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=1&page=1&rows=1000&order=price_change_rate&order_type=1";
+
 const REQUEST_HEADERS = {
   accept: "*/*",
   "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -153,8 +157,13 @@ type RemoteApiResponse = {
   };
 };
 
-const fetchRemoteRecordsFromApi = async () => {
-  const response = await fetch(REMOTE_API_URL, {
+export type RecordCategory = "industry" | "theme";
+
+const resolveRemoteApiUrl = (category: RecordCategory) =>
+  category === "theme" ? REMOTE_THEME_API_URL : REMOTE_API_URL;
+
+const fetchRemoteRecordsFromApi = async (category: RecordCategory) => {
+  const response = await fetch(resolveRemoteApiUrl(category), {
     method: "GET",
     headers: REQUEST_HEADERS,
     cache: "no-store",
@@ -234,6 +243,7 @@ const normalizeCapitalFlowEntries = (value: Prisma.JsonValue | null): CapitalFlo
 
 export const mapIndexData = (record: IndexData) => ({
   id: record.id,
+  category: record.category,
   index_code: record.indexCode,
   index_name: record.indexName,
   source: record.source,
@@ -271,38 +281,52 @@ const upsertColumnNames = async () => {
 };
 
 export const refreshRemoteRecords = async () => {
-  const records = await fetchRemoteRecordsFromApi();
+  const [industryRecords, themeRecords] = await Promise.all([
+    fetchRemoteRecordsFromApi("industry"),
+    fetchRemoteRecordsFromApi("theme"),
+  ]);
+
+  const upsertRecords = async (
+    category: RecordCategory,
+    records: RemoteRecord[]
+  ) =>
+    Promise.all(
+      records.map(async (item) => {
+        const tradeDateRaw = normalizeTradeDate(item.trade_date ?? item.tradeDate);
+        if (!tradeDateRaw) {
+          return;
+        }
+        const baseFields = buildIndexDataBaseFields(item);
+        await prisma.indexData.upsert({
+          where: {
+            indexCode_tradeDate_category: {
+              indexCode: item.index_code,
+              tradeDate: tradeDateRaw,
+              category,
+            },
+          },
+          create: {
+            category,
+            indexCode: item.index_code,
+            tradeDate: tradeDateRaw,
+            ...baseFields,
+          },
+          update: baseFields,
+        });
+      })
+    );
 
   await Promise.all([
     upsertColumnNames(),
-    ...records.map(async (item) => {
-      const tradeDateRaw = normalizeTradeDate(item.trade_date ?? item.tradeDate);
-      if (!tradeDateRaw) {
-        return;
-      }
-      const baseFields = buildIndexDataBaseFields(item);
-      await prisma.indexData.upsert({
-        where: {
-          indexCode_tradeDate: {
-            indexCode: item.index_code,
-            tradeDate: tradeDateRaw,
-          },
-        },
-        create: {
-          indexCode: item.index_code,
-          tradeDate: tradeDateRaw,
-          ...baseFields,
-        },
-        update: baseFields,
-      });
-    }),
+    upsertRecords("industry", industryRecords),
+    upsertRecords("theme", themeRecords),
   ]);
 
-  return records.length;
+  return industryRecords.length + themeRecords.length;
 };
 
-export const fetchRemoteRecords = async () => {
-  const records = await fetchRemoteRecordsFromApi();
+export const fetchRemoteRecords = async (category: RecordCategory = "industry") => {
+  const records = await fetchRemoteRecordsFromApi(category);
   const mapped = records
     .map((item, index) => {
       const tradeDateRaw = normalizeTradeDate(item.trade_date ?? item.tradeDate);
@@ -311,6 +335,7 @@ export const fetchRemoteRecords = async () => {
       }
       return {
         id: index + 1,
+        category,
         index_code: item.index_code,
         index_name: item.index_name,
         source: item.source ?? item.index_source ?? "SW",

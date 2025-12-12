@@ -37,12 +37,21 @@ export async function GET(request: Request) {
     select: { tradeDate: true },
   });
 
+  const industryRecords = await prisma.indexData.count({
+    where: { category: "industry" },
+  });
+  const themeRecords = await prisma.indexData.count({
+    where: { category: "theme" },
+  });
+
   return NextResponse.json({
     users,
     columns,
     stats: {
       totalRecords,
       lastTradeDate: latestTrade?.tradeDate.toISOString() ?? null,
+      industryRecords,
+      themeRecords,
     },
   });
 }

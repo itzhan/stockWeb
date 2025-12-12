@@ -24,6 +24,7 @@ import type { CapitalFlowEntry } from "@/lib/types/capitalFlow";
 
 type IndexRecord = {
   id: number | string;
+  category?: "industry" | "theme";
   index_code: string;
   index_name: string;
   price_change_rate?: number | null;
@@ -590,6 +591,7 @@ export default function Home() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
+  const [category, setCategory] = useState<"industry" | "theme">("industry");
   const [columnConfigs, setColumnConfigs] = useState<ColumnRecord[]>(
     DEFAULT_COLUMN_CONFIGS,
   );
@@ -612,6 +614,7 @@ export default function Home() {
     setAvailableDates([]);
     setSelectedDate(null);
     setLastFetchAt(null);
+    setCategory("industry");
     if (!silent) {
       message.success("已退出登录");
     }
@@ -787,8 +790,14 @@ export default function Home() {
     if (!userToken) return null;
     setLoading(true);
     try {
-      const suffix = date ? `?date=${date}` : "";
-      const response = await userAuthFetch(`/api/records${suffix}`);
+      const params = new URLSearchParams();
+      params.set("category", category);
+      if (date) {
+        params.set("date", date);
+      }
+      const response = await userAuthFetch(
+        `/api/records${params.toString() ? `?${params.toString()}` : ""}`,
+      );
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.message || "拉取数据失败，请稍后重试");
@@ -811,7 +820,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [userAuthFetch, userToken]);
+  }, [category, userAuthFetch, userToken]);
 
   useEffect(() => {
     if (profile?.hasMembership) {
@@ -820,7 +829,15 @@ export default function Home() {
     } else {
       setRecords([]);
     }
-  }, [profile?.hasMembership, loadColumnConfigs, loadRecords]);
+  }, [profile?.hasMembership, loadColumnConfigs, loadRecords, category]);
+
+  const handleCategoryChange = (next: "industry" | "theme") => {
+    setCategory(next);
+    setSelectedDate(null);
+    setRecords([]);
+    setAvailableDates([]);
+    setLastFetchAt(null);
+  };
 
   const flowColumnConfigs = useMemo(
     () => buildColumnConfigs(columnConfigs, FLOW_COLUMN_KEYS),
@@ -839,9 +856,14 @@ export default function Home() {
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      const response = await userAuthFetch("/api/records/refresh", {
+      const params = new URLSearchParams();
+      params.set("category", category);
+      const response = await userAuthFetch(
+        `/api/records/refresh?${params.toString()}`,
+        {
         method: "POST",
-      });
+        },
+      );
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || "主动刷新失败");
@@ -1134,7 +1156,9 @@ export default function Home() {
                 className="w-full justify-between flex-wrap gap-4"
               >
                 <div>
-                  <Typography.Title level={2}>行业指数洞察</Typography.Title>
+                  <Typography.Title level={2}>
+                    {category === "industry" ? "行业指数洞察" : "概念指数洞察"}
+                  </Typography.Title>
                   <Typography.Text type="secondary">
                     此数据摘取于沪深两市交易所官方数据，次日盘前8点30分更新，该数据不作为投资依据，仅供投资参考。
                   </Typography.Text>
@@ -1151,6 +1175,15 @@ export default function Home() {
                 className="w-full justify-between flex-wrap gap-4"
               >
                 <Space wrap align="center">
+                  <Select
+                    value={category}
+                    options={[
+                      { label: "行业", value: "industry" },
+                      { label: "概念", value: "theme" },
+                    ]}
+                    onChange={(value) => handleCategoryChange(value)}
+                    style={{ width: 120 }}
+                  />
                   <Typography.Text type="secondary">
                     当前数据日期：{selectedDate ?? "--"}
                   </Typography.Text>

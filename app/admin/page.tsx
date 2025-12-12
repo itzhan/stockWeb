@@ -49,6 +49,8 @@ type OverviewPayload = {
   stats: {
     totalRecords: number;
     lastTradeDate: string | null;
+    industryRecords?: number;
+    themeRecords?: number;
   };
 };
 
@@ -71,6 +73,7 @@ type ColumnCategory = "flow" | "valuation" | "other";
 
 type StockRecord = {
   id: number;
+  category?: "industry" | "theme";
   index_code: string;
   index_name: string;
   trade_date: string;
@@ -233,6 +236,7 @@ export default function AdminPage() {
   const [stockSelectedDate, setStockSelectedDate] = useState<string | null>(null);
   const [stockLastFetchAt, setStockLastFetchAt] = useState<string | null>(null);
   const [stockRefreshing, setStockRefreshing] = useState(false);
+  const [stockCategory, setStockCategory] = useState<"industry" | "theme">("industry");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [activationCodes, setActivationCodes] = useState<ActivationCodeRecord[]>([]);
   const [activationLoading, setActivationLoading] = useState(false);
@@ -372,6 +376,7 @@ export default function AdminPage() {
     setStockLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("category", stockCategory);
       if (date) {
         params.set("date", date);
       }
@@ -397,7 +402,7 @@ export default function AdminPage() {
     } finally {
       setStockLoading(false);
     }
-  }, [authFetch]);
+  }, [authFetch, stockCategory]);
 
   useEffect(() => {
     if (!isLogged) return;
@@ -413,6 +418,7 @@ export default function AdminPage() {
     fetchColumns,
     fetchActivationCodes,
     loadStockRecords,
+    stockCategory,
   ]);
 
   const handleLogin = async (values: { username: string; password: string }) => {
@@ -646,10 +652,18 @@ export default function AdminPage() {
     loadStockRecords(value);
   };
 
+  const handleStockCategoryChange = (value: "industry" | "theme") => {
+    setStockCategory(value);
+    setStockSelectedDate(null);
+    setStockRecords([]);
+    setStockAvailableDates([]);
+    setStockLastFetchAt(null);
+  };
+
   const handleStockRefresh = useCallback(async () => {
     setStockRefreshing(true);
     try {
-      const response = await authFetch("/api/records/refresh", {
+      const response = await authFetch(`/api/records/refresh?category=${stockCategory}`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -664,7 +678,7 @@ export default function AdminPage() {
       setStockRefreshing(false);
       await loadStockRecords(stockSelectedDate ?? undefined);
     }
-  }, [loadStockRecords, stockSelectedDate]);
+  }, [loadStockRecords, stockSelectedDate, stockCategory]);
 
   const openActivationModal = () => {
     activationForm.resetFields();
@@ -1216,6 +1230,15 @@ export default function AdminPage() {
                 </Typography.Text>
               </div>
               <Space wrap align="center">
+                <Select
+                  value={stockCategory}
+                  options={[
+                    { label: "行业", value: "industry" },
+                    { label: "概念", value: "theme" },
+                  ]}
+                  onChange={(value) => handleStockCategoryChange(value)}
+                  style={{ width: 120 }}
+                />
                 <Typography.Text type="secondary">
                   当前数据日期：{stockSelectedDate ?? "--"}
                 </Typography.Text>

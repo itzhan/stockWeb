@@ -9,7 +9,7 @@ const REFRESH_ENDPOINT = `${APP_URL}/api/records/refresh`;
 
 const runRefresh = async () => {
   try {
-    const response = await fetch(REFRESH_ENDPOINT, {
+    const response = await fetch(`${REFRESH_ENDPOINT}?category=industry`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
