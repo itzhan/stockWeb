@@ -23,7 +23,7 @@ import { CaretUpOutlined, CaretDownOutlined } from "@ant-design/icons";
 import type { CapitalFlowEntry } from "@/lib/types/capitalFlow";
 
 type IndexRecord = {
-  id: number;
+  id: number | string;
   index_code: string;
   index_name: string;
   price_change_rate?: number | null;
@@ -847,14 +847,30 @@ export default function Home() {
         throw new Error(payload?.error || "主动刷新失败");
       }
       const payload = await response.json();
-      message.success(`刷新已触发，处理 ${payload.count ?? 0} 条`);
+      if (payload.stored) {
+        message.success(`刷新已触发，处理 ${payload.count ?? 0} 条`);
+      } else {
+        const remoteRecords = payload.data ?? [];
+        setRecords(remoteRecords);
+        const remoteDate =
+          remoteRecords?.[0]?.trade_date?.split("T")[0] ??
+          payload.timestamp?.split("T")[0] ??
+          selectedDate;
+        setSelectedDate(remoteDate ?? null);
+        setLastFetchAt(payload.timestamp ?? null);
+        message.success(`已获取 ${payload.count ?? remoteRecords.length} 条最新数据（未入库）`);
+      }
     } catch (error) {
       message.error((error as Error).message || "刷新失败");
     } finally {
-      const latestDate = await loadRecords();
-      if (latestDate) {
-        setSelectedDate(latestDate);
+      // 非管理端刷新时不入库，也无需重新从数据库加载
+      if (profile?.role === "admin") {
+        const latestDate = await loadRecords();
+        if (latestDate) {
+          setSelectedDate(latestDate);
+        }
       }
+      setLoading(false);
     }
   };
 
@@ -1120,7 +1136,7 @@ export default function Home() {
                 <div>
                   <Typography.Title level={2}>行业指数洞察</Typography.Title>
                   <Typography.Text type="secondary">
-                    数据来源于沪深交易所，每日盘前 8:30 更新，仅供参考。
+                    此数据摘取于沪深两市交易所官方数据，次日盘前8点30分更新，该数据不作为投资依据，仅供投资参考。
                   </Typography.Text>
                 </div>
                 <Space align="center" wrap>
@@ -1155,15 +1171,13 @@ export default function Home() {
                       : "--"}
                   </Typography.Text>
                 </Space>
-                {profile.role === "admin" && (
-                  <Button
-                    type="primary"
-                    loading={loading}
-                    onClick={handleRefresh}
-                  >
-                    手动获取数据
-                  </Button>
-                )}
+                <Button
+                  type="primary"
+                  loading={loading}
+                  onClick={handleRefresh}
+                >
+                  手动获取数据
+                </Button>
               </Space>
               <Divider />
               <Tabs items={tabItems} type="card" />

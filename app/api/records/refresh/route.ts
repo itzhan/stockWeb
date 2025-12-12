@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import { refreshRemoteRecords } from "../service";
+import { fetchRemoteRecords, refreshRemoteRecords } from "../service";
 import { requireMembership } from "@/lib/userSession";
 import { requireAdminAuth } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  let isAdmin = false;
   try {
     await requireMembership(request);
   } catch {
     try {
       requireAdminAuth(request);
+      isAdmin = true;
     } catch (error) {
       return NextResponse.json(
         { message: (error as Error).message || "未授权" },
@@ -17,11 +19,23 @@ export async function POST(request: Request) {
     }
   }
   try {
-    const count = await refreshRemoteRecords();
+    if (isAdmin) {
+      const count = await refreshRemoteRecords();
+      return NextResponse.json({
+        success: true,
+        count,
+        timestamp: new Date().toISOString(),
+        stored: true,
+      });
+    }
+
+    const data = await fetchRemoteRecords();
     return NextResponse.json({
       success: true,
-      count,
+      data,
+      count: data.length,
       timestamp: new Date().toISOString(),
+      stored: false,
     });
   } catch (error) {
     console.error(error);

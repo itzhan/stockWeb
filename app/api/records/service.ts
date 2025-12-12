@@ -153,6 +153,42 @@ type RemoteApiResponse = {
   };
 };
 
+const fetchRemoteRecordsFromApi = async () => {
+  const response = await fetch(REMOTE_API_URL, {
+    method: "GET",
+    headers: REQUEST_HEADERS,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "远程接口异常");
+  }
+
+  const payload = (await response.json()) as RemoteApiResponse;
+  return (payload.data?.records ?? []) as RemoteRecord[];
+};
+
+const buildIndexDataBaseFields = (item: RemoteRecord) => ({
+  indexName: item.index_name,
+  source: item.source ?? item.index_source ?? "SW",
+  priceChangeRate: safeNumber(item.price_change_rate ?? item.priceChangeRate),
+  etfLatestScales: safeNumber(item.etf_latest_scales ?? item.etfLatestScales),
+  turnover: safeNumber(item.turnover),
+  etfNetPurRedeem: safeNumber(item.etf_net_pur_redeem ?? item.etfNetPurRedeem),
+  etfNetPurRedeem1m: safeNumber(item.etf_net_pur_redeem1m),
+  chgRateD5: safeNumber(item.chg_rate_d5),
+  chgRateM1: safeNumber(item.chg_rate_m1),
+  chgRateYear: safeNumber(item.chg_rate_year),
+  peTtm: safeNumber(item.pe_ttm),
+  peTtmPercentY3: safeNumber(item.pe_ttm_percent_y3),
+  pb: safeNumber(item.pb),
+  pbPercentY3: safeNumber(item.pb_percent_y3),
+  dividendYieldRatio: safeNumber(item.dividend_yield_ratio),
+  capitalFlowW8: item.capital_flow_w8 ?? item.capitalFlowW8 ?? [],
+  rawData: item,
+});
+
 export const formatDateKey = (date: Date) => date.toISOString().split("T")[0];
 
 export const normalizeTradeDate = (value: string | Date | null | undefined) => {
@@ -235,19 +271,7 @@ const upsertColumnNames = async () => {
 };
 
 export const refreshRemoteRecords = async () => {
-  const response = await fetch(REMOTE_API_URL, {
-    method: "GET",
-    headers: REQUEST_HEADERS,
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "远程接口异常");
-  }
-
-  const payload = (await response.json()) as RemoteApiResponse;
-  const records = (payload.data?.records ?? []) as RemoteRecord[];
+  const records = await fetchRemoteRecordsFromApi();
 
   await Promise.all([
     upsertColumnNames(),
@@ -256,6 +280,7 @@ export const refreshRemoteRecords = async () => {
       if (!tradeDateRaw) {
         return;
       }
+      const baseFields = buildIndexDataBaseFields(item);
       await prisma.indexData.upsert({
         where: {
           indexCode_tradeDate: {
@@ -265,47 +290,50 @@ export const refreshRemoteRecords = async () => {
         },
         create: {
           indexCode: item.index_code,
-          indexName: item.index_name,
-          source: item.source ?? item.index_source ?? "SW",
           tradeDate: tradeDateRaw,
-          priceChangeRate: safeNumber(item.price_change_rate ?? item.priceChangeRate),
-          etfLatestScales: safeNumber(item.etf_latest_scales ?? item.etfLatestScales),
-          turnover: safeNumber(item.turnover),
-          etfNetPurRedeem: safeNumber(item.etf_net_pur_redeem),
-          etfNetPurRedeem1m: safeNumber(item.etf_net_pur_redeem1m),
-          chgRateD5: safeNumber(item.chg_rate_d5),
-          chgRateM1: safeNumber(item.chg_rate_m1),
-          chgRateYear: safeNumber(item.chg_rate_year),
-          peTtm: safeNumber(item.pe_ttm),
-          peTtmPercentY3: safeNumber(item.pe_ttm_percent_y3),
-          pb: safeNumber(item.pb),
-          pbPercentY3: safeNumber(item.pb_percent_y3),
-          dividendYieldRatio: safeNumber(item.dividend_yield_ratio),
-          capitalFlowW8: item.capital_flow_w8 ?? item.capitalFlowW8 ?? [],
-          rawData: item,
+          ...baseFields,
         },
-        update: {
-          indexName: item.index_name,
-          source: item.source ?? item.index_source ?? "SW",
-          priceChangeRate: safeNumber(item.price_change_rate ?? item.priceChangeRate),
-          etfLatestScales: safeNumber(item.etf_latest_scales ?? item.etfLatestScales),
-          turnover: safeNumber(item.turnover),
-          etfNetPurRedeem: safeNumber(item.etf_net_pur_redeem),
-          etfNetPurRedeem1m: safeNumber(item.etf_net_pur_redeem1m),
-          chgRateD5: safeNumber(item.chg_rate_d5),
-          chgRateM1: safeNumber(item.chg_rate_m1),
-          chgRateYear: safeNumber(item.chg_rate_year),
-          peTtm: safeNumber(item.pe_ttm),
-          peTtmPercentY3: safeNumber(item.pe_ttm_percent_y3),
-          pb: safeNumber(item.pb),
-          pbPercentY3: safeNumber(item.pb_percent_y3),
-          dividendYieldRatio: safeNumber(item.dividend_yield_ratio),
-          capitalFlowW8: item.capital_flow_w8 ?? item.capitalFlowW8 ?? [],
-          rawData: item,
-        },
+        update: baseFields,
       });
     }),
   ]);
 
   return records.length;
+};
+
+export const fetchRemoteRecords = async () => {
+  const records = await fetchRemoteRecordsFromApi();
+  const mapped = records
+    .map((item, index) => {
+      const tradeDateRaw = normalizeTradeDate(item.trade_date ?? item.tradeDate);
+      if (!tradeDateRaw) {
+        return null;
+      }
+      return {
+        id: index + 1,
+        index_code: item.index_code,
+        index_name: item.index_name,
+        source: item.source ?? item.index_source ?? "SW",
+        trade_date: tradeDateRaw.toISOString(),
+        price_change_rate: safeNumber(item.price_change_rate ?? item.priceChangeRate),
+        etf_latest_scales: safeNumber(item.etf_latest_scales ?? item.etfLatestScales),
+        turnover: safeNumber(item.turnover),
+        etf_net_pur_redeem: safeNumber(item.etf_net_pur_redeem ?? item.etfNetPurRedeem),
+        etf_net_pur_redeem1m: safeNumber(item.etf_net_pur_redeem1m),
+        chg_rate_d5: safeNumber(item.chg_rate_d5),
+        chg_rate_m1: safeNumber(item.chg_rate_m1),
+        chg_rate_year: safeNumber(item.chg_rate_year),
+        pe_ttm: safeNumber(item.pe_ttm),
+        pe_ttm_percent_y3: safeNumber(item.pe_ttm_percent_y3),
+        pb: safeNumber(item.pb),
+        pb_percent_y3: safeNumber(item.pb_percent_y3),
+        dividend_yield_ratio: safeNumber(item.dividend_yield_ratio),
+        capital_flow_w8: normalizeCapitalFlowEntries(
+          (item.capital_flow_w8 ?? item.capitalFlowW8 ?? []) as Prisma.JsonValue
+        ),
+      };
+    })
+    .filter(Boolean);
+
+  return mapped as ReturnType<typeof mapIndexData>[];
 };

@@ -13,8 +13,6 @@ services:
       APP_URL: http://localhost:3101
       CRON_APP_URL: http://localhost:3000
       REMOTE_API_URL: https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=3%2C4&page=1&rows=1000&order=price_change_rate&order_type=1
-    volumes:
-      - .:/usr/src/app:cached
     depends_on:
       db:
         condition: service_healthy
