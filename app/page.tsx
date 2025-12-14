@@ -1204,13 +1204,33 @@ export default function Home() {
                       : "--"}
                   </Typography.Text>
                 </Space>
-                <Button
-                  type="primary"
-                  loading={loading}
-                  onClick={handleRefresh}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    columnGap: 12,
+                    rowGap: 6,
+                    flexWrap: "wrap",
+                    minWidth: 0,
+                  }}
                 >
-                  手动获取数据
-                </Button>
+                  <Button
+                    type="primary"
+                    loading={loading}
+                    onClick={handleRefresh}
+                  >
+                    手动获取数据
+                  </Button>
+                  <Typography.Text
+                    type="danger"
+                    style={{
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    如无法获取，请联系数据维护人员：qqq7286（红桃Q）
+                  </Typography.Text>
+                </div>
               </Space>
               <Divider />
               <Tabs items={tabItems} type="card" />
