@@ -1228,7 +1228,7 @@ export default function Home() {
                       wordBreak: "break-word",
                     }}
                   >
-                    如无法获取，请联系数据维护人员：qqq7286（红桃Q）
+                    如无法获取，请联系数据维护人员：xique_6789(W)
                   </Typography.Text>
                 </div>
               </Space>
