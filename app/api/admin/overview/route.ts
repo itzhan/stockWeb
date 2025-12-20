@@ -43,6 +43,9 @@ export async function GET(request: Request) {
   const themeRecords = await prisma.indexData.count({
     where: { category: "theme" },
   });
+  const etfIndexRecords = await prisma.indexData.count({
+    where: { category: "etf_index" },
+  });
 
   return NextResponse.json({
     users,
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
       lastTradeDate: latestTrade?.tradeDate.toISOString() ?? null,
       industryRecords,
       themeRecords,
+      etfIndexRecords,
     },
   });
 }

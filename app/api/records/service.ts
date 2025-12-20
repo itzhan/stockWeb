@@ -10,6 +10,10 @@ const REMOTE_THEME_API_URL =
   process.env.REMOTE_THEME_API_URL ??
   "https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=1&page=1&rows=1000&order=price_change_rate&order_type=1";
 
+const REMOTE_ETF_INDEX_API_URL =
+  process.env.REMOTE_ETF_INDEX_API_URL ??
+  "https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=6&page=1&rows=15&order=etf_net_pur_redeem&order_type=-1";
+
 const REQUEST_HEADERS = {
   accept: "*/*",
   "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -157,10 +161,17 @@ type RemoteApiResponse = {
   };
 };
 
-export type RecordCategory = "industry" | "theme";
+export type RecordCategory = "industry" | "theme" | "etf_index";
 
-const resolveRemoteApiUrl = (category: RecordCategory) =>
-  category === "theme" ? REMOTE_THEME_API_URL : REMOTE_API_URL;
+const resolveRemoteApiUrl = (category: RecordCategory) => {
+  if (category === "theme") {
+    return REMOTE_THEME_API_URL;
+  }
+  if (category === "etf_index") {
+    return REMOTE_ETF_INDEX_API_URL;
+  }
+  return REMOTE_API_URL;
+};
 
 const fetchRemoteRecordsFromApi = async (category: RecordCategory) => {
   const response = await fetch(resolveRemoteApiUrl(category), {
@@ -265,25 +276,27 @@ export const mapIndexData = (record: IndexData) => ({
 });
 
 const upsertColumnNames = async () => {
-  await Promise.all(
-    COLUMN_CONFIGS.map((column) =>
-      prisma.columnName.upsert({
-        where: { key: column.key },
-        update: {
-          displayName: column.displayName,
-          description: column.description,
-          displayOrder: column.displayOrder,
-        },
-        create: column,
-      })
-    )
-  );
+  const existing = await prisma.columnName.findMany({
+    select: { key: true },
+  });
+  const existingKeys = new Set(existing.map((item: { key: string }) => item.key));
+  const toCreate = COLUMN_CONFIGS.filter((column) => !existingKeys.has(column.key));
+
+  if (toCreate.length === 0) {
+    return;
+  }
+
+  await prisma.columnName.createMany({
+    data: toCreate,
+    skipDuplicates: true,
+  });
 };
 
 export const refreshRemoteRecords = async () => {
-  const [industryRecords, themeRecords] = await Promise.all([
+  const [industryRecords, themeRecords, etfIndexRecords] = await Promise.all([
     fetchRemoteRecordsFromApi("industry"),
     fetchRemoteRecordsFromApi("theme"),
+    fetchRemoteRecordsFromApi("etf_index"),
   ]);
 
   const upsertRecords = async (
@@ -320,9 +333,10 @@ export const refreshRemoteRecords = async () => {
     upsertColumnNames(),
     upsertRecords("industry", industryRecords),
     upsertRecords("theme", themeRecords),
+    upsertRecords("etf_index", etfIndexRecords),
   ]);
 
-  return industryRecords.length + themeRecords.length;
+  return industryRecords.length + themeRecords.length + etfIndexRecords.length;
 };
 
 export const fetchRemoteRecords = async (category: RecordCategory = "industry") => {

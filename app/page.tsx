@@ -24,7 +24,7 @@ import type { CapitalFlowEntry } from "@/lib/types/capitalFlow";
 
 type IndexRecord = {
   id: number | string;
-  category?: "industry" | "theme";
+  category?: "industry" | "theme" | "etf_index";
   index_code: string;
   index_name: string;
   price_change_rate?: number | null;
@@ -342,7 +342,7 @@ const nameColumn: ColumnType<IndexRecord> = {
   render: (_value, record) => (
     <Space
       direction="vertical"
-      size={1}
+      size={2}
       style={{ width: 70, alignItems: "flex-start" }}
     >
       <Typography.Text
@@ -352,6 +352,33 @@ const nameColumn: ColumnType<IndexRecord> = {
       >
         {record.index_name}
       </Typography.Text>
+      {record.category === "etf_index" && (
+        <Tag
+          color="blue"
+          style={{
+            marginInlineEnd: 0,
+            borderRadius: 999,
+            fontSize: 11,
+            paddingInline: 6,
+            height: 18,
+            lineHeight: "16px",
+            display: "inline-flex",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              maxWidth: 64,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              display: "inline-block",
+            }}
+          >
+            {record.index_code}
+          </span>
+        </Tag>
+      )}
     </Space>
   ),
 };
@@ -591,7 +618,9 @@ export default function Home() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
-  const [category, setCategory] = useState<"industry" | "theme">("industry");
+  const [category, setCategory] = useState<
+    "industry" | "theme" | "etf_index"
+  >("industry");
   const [columnConfigs, setColumnConfigs] = useState<ColumnRecord[]>(
     DEFAULT_COLUMN_CONFIGS,
   );
@@ -831,7 +860,7 @@ export default function Home() {
     }
   }, [profile?.hasMembership, loadColumnConfigs, loadRecords, category]);
 
-  const handleCategoryChange = (next: "industry" | "theme") => {
+  const handleCategoryChange = (next: "industry" | "theme" | "etf_index") => {
     setCategory(next);
     setSelectedDate(null);
     setRecords([]);
@@ -1157,7 +1186,11 @@ export default function Home() {
               >
                 <div>
                   <Typography.Title level={2}>
-                    {category === "industry" ? "行业指数洞察" : "概念指数洞察"}
+                    {category === "industry"
+                      ? "行业指数洞察"
+                      : category === "theme"
+                        ? "概念指数洞察"
+                        : "具体ETF指数"}
                   </Typography.Title>
                   <Typography.Text type="secondary">
                     此数据摘取于沪深两市交易所官方数据，次日盘前8点30分更新，该数据不作为投资依据，仅供投资参考。
@@ -1180,6 +1213,7 @@ export default function Home() {
                     options={[
                       { label: "行业", value: "industry" },
                       { label: "概念", value: "theme" },
+                      { label: "具体ETF指数", value: "etf_index" },
                     ]}
                     onChange={(value) => handleCategoryChange(value)}
                     style={{ width: 120 }}
@@ -1228,7 +1262,7 @@ export default function Home() {
                       wordBreak: "break-word",
                     }}
                   >
-                    如无法获取，请联系数据维护人员：xique_6789(W)
+                    如无法获取，请联系数据维护人员：xique_6789
                   </Typography.Text>
                 </div>
               </Space>

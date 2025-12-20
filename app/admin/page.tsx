@@ -51,6 +51,7 @@ type OverviewPayload = {
     lastTradeDate: string | null;
     industryRecords?: number;
     themeRecords?: number;
+    etfIndexRecords?: number;
   };
 };
 
@@ -73,7 +74,7 @@ type ColumnCategory = "flow" | "valuation" | "other";
 
 type StockRecord = {
   id: number;
-  category?: "industry" | "theme";
+  category?: "industry" | "theme" | "etf_index";
   index_code: string;
   index_name: string;
   trade_date: string;
@@ -236,7 +237,9 @@ export default function AdminPage() {
   const [stockSelectedDate, setStockSelectedDate] = useState<string | null>(null);
   const [stockLastFetchAt, setStockLastFetchAt] = useState<string | null>(null);
   const [stockRefreshing, setStockRefreshing] = useState(false);
-  const [stockCategory, setStockCategory] = useState<"industry" | "theme">("industry");
+  const [stockCategory, setStockCategory] = useState<
+    "industry" | "theme" | "etf_index"
+  >("industry");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [activationCodes, setActivationCodes] = useState<ActivationCodeRecord[]>([]);
   const [activationLoading, setActivationLoading] = useState(false);
@@ -652,7 +655,9 @@ export default function AdminPage() {
     loadStockRecords(value);
   };
 
-  const handleStockCategoryChange = (value: "industry" | "theme") => {
+  const handleStockCategoryChange = (
+    value: "industry" | "theme" | "etf_index",
+  ) => {
     setStockCategory(value);
     setStockSelectedDate(null);
     setStockRecords([]);
@@ -1235,6 +1240,7 @@ export default function AdminPage() {
                   options={[
                     { label: "行业", value: "industry" },
                     { label: "概念", value: "theme" },
+                    { label: "具体ETF指数", value: "etf_index" },
                   ]}
                   onChange={(value) => handleStockCategoryChange(value)}
                   style={{ width: 120 }}

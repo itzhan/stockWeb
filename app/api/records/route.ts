@@ -9,8 +9,15 @@ import { requireMembership } from "@/lib/userSession";
 import { requireAdminAuth } from "@/lib/auth";
 import type { RecordCategory } from "./service";
 
-const normalizeCategory = (value: string | null): RecordCategory =>
-  value === "theme" ? "theme" : "industry";
+const normalizeCategory = (value: string | null): RecordCategory => {
+  if (value === "theme") {
+    return "theme";
+  }
+  if (value === "etf_index") {
+    return "etf_index";
+  }
+  return "industry";
+};
 
 export async function GET(request: NextRequest) {
   try {
