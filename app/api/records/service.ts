@@ -158,6 +158,7 @@ type RemoteRecord = {
 type RemoteApiResponse = {
   data?: {
     records?: RemoteRecord[];
+    total?: number;
   };
 };
 
@@ -173,8 +174,8 @@ const resolveRemoteApiUrl = (category: RecordCategory) => {
   return REMOTE_API_URL;
 };
 
-const fetchRemoteRecordsFromApi = async (category: RecordCategory) => {
-  const response = await fetch(resolveRemoteApiUrl(category), {
+const fetchRemoteRecordsPage = async (url: string) => {
+  const response = await fetch(url, {
     method: "GET",
     headers: REQUEST_HEADERS,
     cache: "no-store",
@@ -186,7 +187,87 @@ const fetchRemoteRecordsFromApi = async (category: RecordCategory) => {
   }
 
   const payload = (await response.json()) as RemoteApiResponse;
-  return (payload.data?.records ?? []) as RemoteRecord[];
+  return {
+    records: (payload.data?.records ?? []) as RemoteRecord[],
+    total: payload.data?.total ?? null,
+  };
+};
+
+const setPageParam = (url: string, page: number) => {
+  const next = new URL(url);
+  next.searchParams.set("page", String(page));
+  return next.toString();
+};
+
+const resolveRowsParam = (url: string) => {
+  const target = new URL(url);
+  const rowsParam = Number(target.searchParams.get("rows"));
+  return Number.isFinite(rowsParam) && rowsParam > 0 ? rowsParam : 100;
+};
+
+const fetchRemoteRecordsFromApi = async (category: RecordCategory) => {
+  const url = resolveRemoteApiUrl(category);
+  if (category !== "etf_index") {
+    const page = await fetchRemoteRecordsPage(url);
+    return page.records;
+  }
+
+  const rows = resolveRowsParam(url);
+  const maxPages = Math.max(
+    1,
+    Number(process.env.REMOTE_ETF_INDEX_MAX_PAGES ?? 200)
+  );
+  const batchSize = Math.max(
+    1,
+    Number(process.env.REMOTE_FETCH_PARALLEL_PAGES ?? 8)
+  );
+  const results: RemoteRecord[] = [];
+
+  const firstPage = await fetchRemoteRecordsPage(setPageParam(url, 1));
+  results.push(...firstPage.records);
+
+  const total = firstPage.total ?? 0;
+  if (total > 0) {
+    const totalPages = Math.ceil(total / rows);
+    for (let start = 2; start <= totalPages; start += batchSize) {
+      const pages = Array.from(
+        { length: Math.min(batchSize, totalPages - start + 1) },
+        (_item, index) => start + index
+      );
+      const batch = await Promise.all(
+        pages.map((page) => fetchRemoteRecordsPage(setPageParam(url, page)))
+      );
+      batch.forEach((result) => {
+        results.push(...result.records);
+      });
+      if (batch.some((result) => result.records.length < rows)) {
+        break;
+      }
+    }
+    return results;
+  }
+
+  if (firstPage.records.length < rows) {
+    return results;
+  }
+
+  for (let start = 2; start <= maxPages; start += batchSize) {
+    const pages = Array.from(
+      { length: Math.min(batchSize, maxPages - start + 1) },
+      (_item, index) => start + index
+    );
+    const batch = await Promise.all(
+      pages.map((page) => fetchRemoteRecordsPage(setPageParam(url, page)))
+    );
+    batch.forEach((result) => {
+      results.push(...result.records);
+    });
+    if (batch.some((result) => result.records.length < rows)) {
+      break;
+    }
+  }
+
+  return results;
 };
 
 const buildIndexDataBaseFields = (item: RemoteRecord) => ({

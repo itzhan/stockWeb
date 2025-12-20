@@ -9,4 +9,5 @@ APP_URL=${APP_URL:-http://localhost:3000}
 REMOTE_API_URL=${REMOTE_API_URL:-https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=3%2C4&page=1&rows=1000&order=price_change_rate&order_type=1}
 REMOTE_THEME_API_URL=${REMOTE_THEME_API_URL:-https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=1&page=1&rows=1000&order=price_change_rate&order_type=1}
 REMOTE_ETF_INDEX_API_URL=${REMOTE_ETF_INDEX_API_URL:-https://mg.go-goal.cn/api/v1/ft_fin_app_etf_plate/indthmbro_stat?type=6&page=1&rows=15&order=etf_net_pur_redeem&order_type=-1}
+REMOTE_FETCH_PARALLEL_PAGES=${REMOTE_FETCH_PARALLEL_PAGES:-8}
 EOF
