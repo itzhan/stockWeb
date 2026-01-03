@@ -312,7 +312,9 @@ const safeNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const normalizeCapitalFlowEntries = (value: Prisma.JsonValue | null): CapitalFlowEntry[] => {
+const normalizeCapitalFlowEntries = (
+  value: Prisma.JsonValue | null,
+): CapitalFlowEntry[] => {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -333,7 +335,31 @@ const normalizeCapitalFlowEntries = (value: Prisma.JsonValue | null): CapitalFlo
   return entries;
 };
 
-export const mapIndexData = (record: IndexData) => ({
+export type IndexDataView = Pick<
+  IndexData,
+  | "id"
+  | "category"
+  | "indexCode"
+  | "indexName"
+  | "source"
+  | "tradeDate"
+  | "priceChangeRate"
+  | "etfLatestScales"
+  | "turnover"
+  | "etfNetPurRedeem"
+  | "etfNetPurRedeem1m"
+  | "chgRateD5"
+  | "chgRateM1"
+  | "chgRateYear"
+  | "peTtm"
+  | "peTtmPercentY3"
+  | "pb"
+  | "pbPercentY3"
+  | "dividendYieldRatio"
+  | "capitalFlowW8"
+>;
+
+export const mapIndexData = (record: IndexDataView) => ({
   id: record.id,
   category: record.category,
   index_code: record.indexCode,

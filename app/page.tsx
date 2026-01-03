@@ -31,6 +31,7 @@ type IndexRecord = {
   etf_latest_scales?: number | null;
   turnover?: number | null;
   etf_net_pur_redeem?: number | null;
+  etf_net_pur_redeem1w?: number | null;
   etf_net_pur_redeem1m?: number | null;
   chg_rate_d5?: number | null;
   chg_rate_m1?: number | null;
@@ -251,9 +252,10 @@ const formatSignedChineseUnit = (value?: number | null) => {
 };
 
 const latestWeekFlow = (record: IndexRecord) => {
-  const flow = record.capital_flow_w8?.at(-1);
-  if (!flow) return "--";
-  const number = flow.week_purchase_redeem;
+  const number =
+    typeof record.etf_net_pur_redeem1w === "number"
+      ? record.etf_net_pur_redeem1w
+      : record.capital_flow_w8?.at(-1)?.week_purchase_redeem;
   if (typeof number !== "number" || Number.isNaN(number)) {
     return "--";
   }
@@ -311,7 +313,9 @@ const sortValueGetters: Record<
   turnover: (record) => normalizeTurnoverToYuan(record.turnover),
   etf_net_pur_redeem: (record) => record.etf_net_pur_redeem ?? null,
   latest_week_flow: (record) =>
-    record.capital_flow_w8?.at(-1)?.week_purchase_redeem ?? null,
+    record.etf_net_pur_redeem1w ??
+    record.capital_flow_w8?.at(-1)?.week_purchase_redeem ??
+    null,
   etf_net_pur_redeem1m: (record) => record.etf_net_pur_redeem1m ?? null,
   chg_rate_d5: (record) => record.chg_rate_d5 ?? null,
   chg_rate_m1: (record) => record.chg_rate_m1 ?? null,
@@ -380,6 +384,29 @@ const nameColumn: ColumnType<IndexRecord> = {
         </Tag>
       )}
     </Space>
+  ),
+};
+
+const formatMonthDay = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${month}-${day}`;
+};
+
+const dateColumn: ColumnType<IndexRecord> = {
+  title: "时间",
+  dataIndex: "trade_date",
+  key: "trade_date",
+  fixed: "left",
+  width: 95,
+  render: (value) => (
+    <Typography.Text strong>
+      {typeof value === "string" ? formatMonthDay(value) : "--"}
+    </Typography.Text>
   ),
 };
 
@@ -618,6 +645,9 @@ export default function Home() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [searchTargetName, setSearchTargetName] = useState<string | null>(null);
   const [category, setCategory] = useState<
     "industry" | "theme" | "etf_index"
   >("industry");
@@ -643,6 +673,9 @@ export default function Home() {
     setAvailableDates([]);
     setSelectedDate(null);
     setLastFetchAt(null);
+    setSearchMode(false);
+    setSearchKeyword("");
+    setSearchTargetName(null);
     setCategory("industry");
     if (!silent) {
       message.success("已退出登录");
@@ -815,27 +848,53 @@ export default function Home() {
     }
   }, [userAuthFetch, userToken]);
 
-  const loadRecords = useCallback(async (date?: string) => {
+  const loadRecords = useCallback(async (options?: { date?: string; name?: string }) => {
     if (!userToken) return null;
     setLoading(true);
     try {
+      const date = options?.date;
+      const name = options?.name?.trim() ?? "";
       const params = new URLSearchParams();
       params.set("category", category);
       if (date) {
         params.set("date", date);
+      }
+      if (name) {
+        params.set("name", name);
       }
       const response = await userAuthFetch(
         `/api/records${params.toString() ? `?${params.toString()}` : ""}`,
       );
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        if (payload?.candidates?.length) {
+          Modal.info({
+            title: payload?.message || "搜索失败",
+            content: (
+              <div style={{ whiteSpace: "pre-wrap" }}>
+                {payload.candidates
+                  .map(
+                    (item: { indexName: string; indexCode: string }) =>
+                      `${item.indexName}（${item.indexCode}）`,
+                  )
+                  .join("\n")}
+              </div>
+            ),
+          });
+        }
         throw new Error(payload?.message || "拉取数据失败，请稍后重试");
       }
       const payload = await response.json();
+      const isSearch = payload.mode === "search";
+      setSearchMode(isSearch);
+      const nextSearchTargetName = isSearch
+        ? (payload.searchName ?? (name || null))
+        : null;
+      setSearchTargetName(nextSearchTargetName);
       setRecords(payload.data ?? []);
       setAvailableDates(payload.availableDates ?? []);
       setLastFetchAt(payload.lastFetchAt ?? null);
-      if (!date) {
+      if (!date && !isSearch && !name) {
         setSelectedDate(
           (prev) =>
             prev ?? payload.currentDate ?? payload.availableDates?.[0] ?? null,
@@ -866,6 +925,9 @@ export default function Home() {
     setRecords([]);
     setAvailableDates([]);
     setLastFetchAt(null);
+    setSearchMode(false);
+    setSearchKeyword("");
+    setSearchTargetName(null);
   };
 
   const flowColumnConfigs = useMemo(
@@ -878,8 +940,32 @@ export default function Home() {
   );
 
   const handleDateChange = (value: string) => {
+    setSearchMode(false);
+    setSearchKeyword("");
+    setSearchTargetName(null);
     setSelectedDate(value);
-    loadRecords(value);
+    loadRecords({ date: value });
+  };
+
+  const handleSearch = async (keyword: string) => {
+    const trimmed = keyword.trim();
+    if (!trimmed) {
+      message.warning("请输入要搜索的名称");
+      return;
+    }
+    setSearchKeyword(trimmed);
+    await loadRecords({ name: trimmed });
+  };
+
+  const handleClearSearch = async () => {
+    setSearchMode(false);
+    setSearchKeyword("");
+    setSearchTargetName(null);
+    if (selectedDate) {
+      await loadRecords({ date: selectedDate });
+    } else {
+      await loadRecords();
+    }
   };
 
   const handleRefresh = async () => {
@@ -1012,9 +1098,13 @@ export default function Home() {
     });
   };
 
-  const flowColumns = [nameColumn, ...buildColumns(flowColumnConfigs, "flow")];
+  const primaryColumn = searchMode ? dateColumn : nameColumn;
+  const flowColumns = [
+    primaryColumn,
+    ...buildColumns(flowColumnConfigs, "flow"),
+  ];
   const valuationColumns = [
-    nameColumn,
+    primaryColumn,
     ...buildColumns(valuationColumnConfigs, "valuation"),
   ];
 
@@ -1029,7 +1119,7 @@ export default function Home() {
           dataSource={sortedFlowRecords}
           loading={loading}
           rowKey="id"
-          pagination={false}
+          pagination={searchMode ? { pageSize: 50, showSizeChanger: true } : false}
           size="small"
           tableLayout="fixed"
           scroll={{ x: "max-content" }}
@@ -1046,7 +1136,7 @@ export default function Home() {
           dataSource={sortedValuationRecords}
           loading={loading}
           rowKey="id"
-          pagination={false}
+          pagination={searchMode ? { pageSize: 50, showSizeChanger: true } : false}
           size="small"
           tableLayout="fixed"
           scroll={{ x: "max-content" }}
@@ -1218,19 +1308,38 @@ export default function Home() {
                     onChange={(value) => handleCategoryChange(value)}
                     style={{ width: 120 }}
                   />
-                  <Typography.Text type="secondary">
-                    当前数据日期：{selectedDate ?? "--"}
-                  </Typography.Text>
-                  <Select
-                    value={selectedDate ?? undefined}
-                    options={availableDates.map((date) => ({
-                      label: date,
-                      value: date,
-                    }))}
-                    placeholder="筛选日期"
-                    onChange={handleDateChange}
-                    style={{ minWidth: 160 }}
+                  <Input.Search
+                    value={searchKeyword}
+                    onChange={(event) => setSearchKeyword(event.target.value)}
+                    onSearch={handleSearch}
+                    placeholder="输入名称，搜索历史数据"
+                    allowClear
+                    style={{ width: 220 }}
                   />
+                  {searchMode ? (
+                    <>
+                      <Typography.Text type="secondary">
+                        当前搜索：{searchTargetName ?? searchKeyword}
+                      </Typography.Text>
+                      <Button onClick={handleClearSearch}>退出搜索</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Typography.Text type="secondary">
+                        当前数据日期：{selectedDate ?? "--"}
+                      </Typography.Text>
+                      <Select
+                        value={selectedDate ?? undefined}
+                        options={availableDates.map((date) => ({
+                          label: date,
+                          value: date,
+                        }))}
+                        placeholder="筛选日期"
+                        onChange={handleDateChange}
+                        style={{ minWidth: 160 }}
+                      />
+                    </>
+                  )}
                   <Typography.Text type="secondary">
                     最近同步：
                     {lastFetchAt
